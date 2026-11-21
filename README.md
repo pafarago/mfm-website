@@ -6,7 +6,7 @@ The folders mirror the server's `wp-content`, so a path here is the same path th
 ```
 wp-content/
   themes/mfm-theme/      phone-first theme (replaces mfm-classic)
-  plugins/mfm-docs/      Drive document trees (replaces embed-all-shortcode)
+  plugins/mfm-docs/      Drive document lists and cached PDF/Word copies (replaces embed-all-shortcode)
 deploy/
   hooks/pre-receive      build, check and switch a release on push
   rollback.sh            switch back to an earlier release
@@ -96,13 +96,35 @@ commit, or `git revert`, and push.
 | `/srv/mfm/deploy.log` | deploy and rollback history |
 | `/var/cache/mfm-docs` | document cache used by mfm-docs (www-data only) |
 
+## Documents (mfm-docs)
+
+Settings → MFM Docs lists the Drive folders shown under `/docs/…`, the
+service account address each folder must be shared with, sync status and a
+**Refresh documents now** button. `wp mfm-docs status` and `wp mfm-docs sync`
+do the same from the shell.
+
+Syncing runs from WordPress cron every 5 minutes. WordPress cron only fires
+when someone visits, so add a real cron entry on the droplet (`crontab -e`):
+
+```
+*/5 * * * * curl -fsS -o /dev/null https://midlothianfriends.freeddns.org/wp-cron.php
+```
+
+Cached copies live in `/var/cache/mfm-docs` (www-data only, outside the web
+root). Deleting them is always safe; they are rebuilt when needed.
+
 ## Cutover from mfm-classic / embed-all-shortcode
 
 1. Push; check the log shows `linked themes/mfm-theme` and `linked plugins/mfm-docs`.
-2. Activate **mfm-docs** and check documents as an admin.
-3. Preview **mfm-theme** (Appearance → Themes → Live Preview), then activate.
-4. Deactivate **embed-all-shortcode**.
-5. Change the Handbook and Public Documents menu links to their `/docs/…` addresses
-   (old `/embed?id=…` links keep working through a redirect).
-6. After a week, delete `wp-content/themes/mfm-classic` and
-   `wp-content/plugins/embed-all-shortcode` from the server.
+2. Activate **MFM Docs**. In Settings → MFM Docs check every status line is ✔,
+   click **Refresh documents now**, and open each folder's **View** link.
+3. Add the cron line above.
+4. Preview **MFM Theme** (Appearance → Themes → Live Preview), assign the menu
+   to **Main menu**, then **Activate & Publish**.
+5. Deactivate **Embed All Shortcode**. Old `/embed?id=…` links now redirect
+   to `/docs/…`, and `[embed-all]` / `[mfm_doc]` in pages keep working.
+6. In Appearance → Menus, change the Handbook and Public Documents links to
+   `/docs/handbook/` and `/docs/public-documents/`.
+7. After a week: delete `wp-content/themes/mfm-classic`,
+   `wp-content/plugins/embed-all-shortcode`, `wp-content/uploads/embedall-cache`
+   and the `.htaccess` rule that protected that cache.
