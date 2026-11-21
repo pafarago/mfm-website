@@ -1,7 +1,8 @@
 # Installed on the server by the deploy hook (composer install --no-dev)
 vendor/
 
-# Local clutter
+# Local clutter (Zone.Identifier: tags Windows adds to files copied into WSL)
+*:Zone.Identifier
 .DS_Store
 Thumbs.db
 *.log

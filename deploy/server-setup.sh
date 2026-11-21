@@ -39,6 +39,7 @@ else
 fi
 
 say "Let $ME create links in wp-content/themes and wp-content/plugins"
+command -v setfacl >/dev/null || sudo apt-get install -y acl
 sudo setfacl -m "u:$ME:rwx" "$WP_CONTENT/themes" "$WP_CONTENT/plugins"
 
 say "Document cache $DOC_CACHE (www-data only, outside the web root)"
