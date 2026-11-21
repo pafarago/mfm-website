@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# MFM website deploy hook (installed as repo.git/hooks/pre-receive on the droplet).
+#
+# A push to the deploy branch is built into a new release folder, checked,
+# and switched live in one step. If anything fails before the switch, the
+# push is rejected and the live site is unchanged.
+#
+# Pushes to other branches are stored but not deployed.
+
+set -euo pipefail
+umask 022
+
+CONF=${MFM_DEPLOY_CONF:-/srv/mfm/deploy.conf}
+if [ ! -r "$CONF" ]; then
+    echo "deploy: cannot read $CONF" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$CONF"
+: "${BASE:=/srv/mfm}"
+: "${WP_CONTENT:?set WP_CONTENT in deploy.conf}"
+: "${KEEP:=5}"
+: "${BRANCH:=main}"
+: "${RELOAD_CMD:=}"
+
+RELEASES="$BASE/releases"
+CURRENT="$BASE/current"
+LOG="$BASE/deploy.log"
+REL=""
+SWITCHED=0
+
+log() { printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG" >&2; }
+
+fail() {
+    log "FAILED: $*"
+    if [ "$SWITCHED" -eq 0 ] && [ -n "$REL" ] && [ -d "$REL" ]; then
+        rm -rf -- "$REL"
+        log "Push rejected. The live site is unchanged."
+    fi
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Which commit (if any) is being pushed to the deploy branch?
+# ---------------------------------------------------------------------------
+target=""
+while read -r _old new ref; do
+    [ "$ref" = "refs/heads/$BRANCH" ] || continue
+    if [[ $new =~ ^0+$ ]]; then
+        fail "deleting $BRANCH is not allowed"
+    fi
+    target=$new
+done
+[ -n "$target" ] || exit 0
+
+# One deploy at a time.
+mkdir -p "$RELEASES"
+exec 9>"$BASE/deploy.lock"
+flock -n 9 || fail "another deploy is running"
+
+short=$(git rev-parse --short "$target")
+REL="$RELEASES/$(date +%Y%m%d-%H%M%S)-$short"
+log "Deploying $short to $REL"
+
+# ---------------------------------------------------------------------------
+# 1. Check out the pushed tree (the new objects are readable in pre-receive).
+# ---------------------------------------------------------------------------
+mkdir -p "$REL"
+git archive "$target" | tar -x -C "$REL" || fail "could not check out $short"
+[ -d "$REL/wp-content" ] || fail "commit has no wp-content folder"
+
+# ---------------------------------------------------------------------------
+# 2. Install PHP dependencies for any theme or plugin that has composer.json.
+# ---------------------------------------------------------------------------
+while IFS= read -r -d '' cj; do
+    dir=$(dirname "$cj")
+    command -v composer >/dev/null || fail "composer is not installed (needed by ${dir#"$REL"/})"
+    log "composer install: ${dir#"$REL"/}"
+    composer install --working-dir="$dir" --no-dev --optimize-autoloader \
+        --no-interaction --no-progress >&2 || fail "composer install in ${dir#"$REL"/}"
+done < <(find "$REL/wp-content" -name composer.json -not -path '*/vendor/*' -print0)
+
+# ---------------------------------------------------------------------------
+# 3. Syntax-check every PHP file we ship (not third-party vendor code).
+# ---------------------------------------------------------------------------
+command -v php >/dev/null || fail "php is not installed"
+lint_errors=0
+while IFS= read -r -d '' f; do
+    if ! out=$(php -l "$f" 2>&1); then
+        printf '%s\n' "$out" >&2
+        lint_errors=1
+    fi
+done < <(find "$REL/wp-content" -name '*.php' -not -path '*/vendor/*' -print0)
+[ "$lint_errors" -eq 0 ] || fail "PHP syntax errors (listed above)"
+
+# ---------------------------------------------------------------------------
+# 4. Switch live: repoint "current" in one atomic rename.
+# ---------------------------------------------------------------------------
+previous=""
+[ -L "$CURRENT" ] && previous=$(readlink -f "$CURRENT")
+ln -sfn "$REL" "$CURRENT.new"
+mv -Tf "$CURRENT.new" "$CURRENT"
+SWITCHED=1
+log "Live: $(basename "$REL")${previous:+ (was $(basename "$previous"))}"
+
+# ---------------------------------------------------------------------------
+# 5. Make sure WordPress sees each theme/plugin the repo manages.
+#    Links point through "current", so they never need changing on deploy.
+#    A real (non-link) folder of the same name is never replaced.
+# ---------------------------------------------------------------------------
+ensure_link() {
+    local rel=$1 dest="$WP_CONTENT/$1" src="$CURRENT/wp-content/$1"
+    if [ -L "$dest" ]; then
+        [ "$(readlink "$dest")" = "$src" ] || { ln -sfn "$src" "$dest"; log "relinked $rel"; }
+    elif [ -e "$dest" ]; then
+        log "WARNING: $dest is a real folder; left alone"
+    else
+        if ln -s "$src" "$dest"; then
+            log "linked $rel"
+        else
+            log "WARNING: could not link $rel (permissions?)"
+        fi
+    fi
+}
+
+for d in "$CURRENT"/wp-content/themes/*/; do
+    [ -f "$d/style.css" ] && ensure_link "themes/$(basename "$d")"
+done
+for d in "$CURRENT"/wp-content/plugins/*/; do
+    compgen -G "$d*.php" >/dev/null && ensure_link "plugins/$(basename "$d")"
+done
+
+# Remove our own links whose theme/plugin is no longer in the repo.
+for link in "$WP_CONTENT"/themes/* "$WP_CONTENT"/plugins/*; do
+    [ -L "$link" ] || continue
+    case $(readlink "$link") in
+        "$CURRENT"/*) [ -e "$link" ] || { rm -f -- "$link"; log "unlinked ${link#"$WP_CONTENT"/} (removed from repo)"; } ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# 6. Let PHP pick up the new files (opcache / realpath cache).
+# ---------------------------------------------------------------------------
+if [ -n "$RELOAD_CMD" ]; then
+    if eval "$RELOAD_CMD" >&2; then
+        log "reloaded: $RELOAD_CMD"
+    else
+        log "WARNING: reload command failed; changes may take a couple of minutes to show"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Keep the newest $KEEP releases (never the live one).
+# ---------------------------------------------------------------------------
+live=$(readlink -f "$CURRENT")
+mapfile -t all < <(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d | sort)
+excess=$(( ${#all[@]} - KEEP ))
+for (( i = 0; i < excess; i++ )); do
+    [ "${all[$i]}" = "$live" ] || { rm -rf -- "${all[$i]}"; log "pruned $(basename "${all[$i]}")"; }
+done
+
+log "Done."
+exit 0

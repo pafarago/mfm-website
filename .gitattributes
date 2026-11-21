@@ -1,0 +1,8 @@
+# Keep LF line endings even when files are touched from Windows; the deploy
+# scripts will not run with CRLF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.woff2 binary

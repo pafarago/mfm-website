@@ -1,0 +1,17 @@
+# /srv/mfm/deploy.conf — read by the pre-receive hook and rollback.sh.
+
+# Where the bare repo, releases and "current" live.
+BASE=/srv/mfm
+
+# The live WordPress wp-content folder.
+WP_CONTENT=/var/www/midlothianfriends/wp-content
+
+# Only pushes to this branch are deployed.
+BRANCH=main
+
+# Release folders to keep for rollback.
+KEEP=5
+
+# Run after each switch so PHP drops cached file paths. Needs a sudoers entry
+# (see README). Leave empty to skip; changes then show within a few minutes.
+RELOAD_CMD="sudo /usr/bin/systemctl reload apache2"
