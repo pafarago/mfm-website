@@ -12,6 +12,8 @@ BRANCH=main
 # Release folders to keep for rollback.
 KEEP=5
 
-# Run after each switch so PHP drops cached file paths. Needs a sudoers entry
-# (see README). Leave empty to skip; changes then show within a few minutes.
-RELOAD_CMD="sudo /usr/bin/systemctl reload apache2"
+# Run after each switch so PHP drops its cached code. Reload the service that
+# actually runs PHP: php8.x-fpm when Apache hands PHP to PHP-FPM (as on the
+# droplet), apache2 only for mod_php. server-setup.sh detects and sets this.
+# Needs a matching sudoers entry (see README).
+RELOAD_CMD="sudo /usr/bin/systemctl reload php8.5-fpm"

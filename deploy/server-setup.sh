@@ -56,18 +56,30 @@ if apache2ctl -M 2>/dev/null | grep -q xsendfile; then
 else
     echo "absent   mod_xsendfile (optional; PHP streaming will be used)"
 fi
-if systemctl list-units --type=service --state=running 2>/dev/null | grep -q 'php.*-fpm'; then
-    fpm=$(systemctl list-units --type=service --state=running | grep -o 'php[0-9.]*-fpm' | head -1)
-    echo "PHP runs under $fpm: set RELOAD_CMD=\"sudo /usr/bin/systemctl reload $fpm\" in $BASE/deploy.conf"
+# Which process runs PHP for the site? mod_php inside Apache, or PHP-FPM
+# (a separate service that an Apache reload does not touch).
+if apache2ctl -M 2>/dev/null | grep -qE 'php[0-9_]*_module'; then
+    php_service=apache2
 else
-    echo "PHP runs inside Apache: RELOAD_CMD=\"sudo /usr/bin/systemctl reload apache2\" is right"
+    php_service=$(systemctl list-units --type=service --state=running --no-legend --plain 'php*-fpm.service' 2>/dev/null \
+        | awk '{print $1}' | sed 's/\.service$//' | sort -V | tail -1)
+fi
+if [ -z "$php_service" ]; then
+    echo "WARNING  could not tell how PHP runs; check RELOAD_CMD in $BASE/deploy.conf by hand"
+    php_service=apache2
+fi
+reload="sudo /usr/bin/systemctl reload $php_service"
+echo "PHP runs under: $php_service"
+if grep -q '^RELOAD_CMD=' "$BASE/deploy.conf" && ! grep -qF "RELOAD_CMD=\"$reload\"" "$BASE/deploy.conf"; then
+    sed -i "s#^RELOAD_CMD=.*#RELOAD_CMD=\"$reload\"#" "$BASE/deploy.conf"
+    echo "Updated RELOAD_CMD in $BASE/deploy.conf to: $reload"
 fi
 
 say "Remaining manual step"
 cat <<EOF
-Allow the reload without a password (adjust the service name to match RELOAD_CMD):
+Allow the reload without a password:
 
-  echo '$ME ALL=(root) NOPASSWD: /usr/bin/systemctl reload apache2' | sudo tee /etc/sudoers.d/mfm-deploy
+  echo '$ME ALL=(root) NOPASSWD: /usr/bin/systemctl reload $php_service' | sudo tee /etc/sudoers.d/mfm-deploy
   sudo chmod 440 /etc/sudoers.d/mfm-deploy && sudo visudo -c
 
 Then, on your WSL machine:
