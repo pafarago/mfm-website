@@ -37,7 +37,7 @@
   --fs-h3: clamp(1.125rem, 1.05rem + 0.35vw, 1.3125rem);
   --lh: 1.6;
   --measure: 68ch;
-  --main-max: 62rem;    /* content card width on wide screens (about 1000px, as in mfm-classic) */
+  --main-max: 69.5rem;  /* content card width on wide screens (about 1110px) */
 
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
@@ -196,7 +196,7 @@ input[type="submit"]:hover {
 .card + .card { margin-top: var(--sp-4); }
 
 @media (min-width: 48em) {
-  .card { padding: 2.25rem clamp(1.5rem, 4vw, 3rem); }
+  .card { padding: 2.5rem clamp(1.5rem, 5vw, 4.5rem); }
 }
 
 .card--page .entry-title,
@@ -508,18 +508,18 @@ html.nav-locked { overflow: hidden; }
 
 /* 8. Menu: wide screens (horizontal bar + dropdowns) ----------------------- */
 @media (min-width: 64em) {
-  :root { --header-h: 80px; }
+  :root { --header-h: 156px; }
 
-  /* Logo left, menu right; if a longer menu ever needs it, the menu wraps
-     to a second row under the logo. */
+  /* Logo centred, menu centred on its own row below it. */
   .site-header__inner {
-    flex-wrap: wrap;
-    row-gap: var(--sp-2);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-3);
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--sp-2);
+    padding-top: var(--sp-4);
+    padding-bottom: var(--sp-2);
     padding-right: var(--gutter);
   }
-  .site-brand__logo { height: 56px; }
+  .site-brand__logo { height: 80px; }
 
   .nav-open,
   .nav-backdrop,
@@ -543,7 +543,7 @@ html.nav-locked { overflow: hidden; }
   .menu--top {
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 2px;
     overflow: visible;
     padding: 0 !important;
