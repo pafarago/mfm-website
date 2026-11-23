@@ -54,7 +54,7 @@
   --radius-sm: 10px;
   --shadow-pop: 0 10px 30px rgb(31 41 51 / 14%);
   --tap: 44px;
-  --header-h: 64px;
+  --header-h: 70px;    /* phone header; wide screens override below */
   --drawer-w: min(20rem, 86vw);
 }
 
@@ -310,7 +310,7 @@ input[type="submit"]:hover {
 }
 
 .site-brand { display: flex; align-items: center; flex: 0 0 auto; }
-.site-brand__logo { display: block; width: auto; height: 42px; }
+.site-brand__logo { display: block; width: auto; height: 46px; }
 
 .nav-open {
   display: inline-flex;
@@ -318,8 +318,8 @@ input[type="submit"]:hover {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 56px;
-  min-height: 52px;
+  min-width: 62px;
+  min-height: 57px;
   padding: 0 var(--sp-2);
   border: 0;
   border-radius: var(--radius-sm);
@@ -328,9 +328,10 @@ input[type="submit"]:hover {
   font: inherit;
   cursor: pointer;
 }
+.nav-open .icon { width: 26px; height: 26px; }
 .nav-open:hover { background: var(--c-hover); }
 .nav-open__label {
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   line-height: 1;
   font-weight: 650;
   letter-spacing: 0.06em;
