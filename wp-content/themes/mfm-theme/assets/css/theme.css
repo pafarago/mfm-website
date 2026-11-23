@@ -37,7 +37,7 @@
   --fs-h3: clamp(1.125rem, 1.05rem + 0.35vw, 1.3125rem);
   --lh: 1.6;
   --measure: 68ch;
-  --column: 46rem;      /* page content column, centred in the card */
+  --main-max: 62rem;    /* content card width on wide screens (about 1000px, as in mfm-classic) */
 
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
@@ -134,7 +134,7 @@ hr { border: 0; border-top: 1px solid var(--c-border); margin: var(--sp-7) 0; }
 .site-main {
   flex: 1 0 auto;
   width: 100%;
-  max-width: var(--page-max);
+  max-width: calc(var(--main-max) + 2 * var(--gutter));
   margin: 0 auto;
   padding: var(--sp-4) var(--gutter) var(--sp-8);
   padding-left: max(var(--gutter), env(safe-area-inset-left));
@@ -196,7 +196,7 @@ input[type="submit"]:hover {
 .card + .card { margin-top: var(--sp-4); }
 
 @media (min-width: 48em) {
-  .card { padding: 2.5rem clamp(1.5rem, 4vw, 3rem); }
+  .card { padding: 2.25rem clamp(1.5rem, 4vw, 3rem); }
 }
 
 .card--page .entry-title,
@@ -210,18 +210,11 @@ input[type="submit"]:hover {
 .entry-content { overflow-wrap: break-word; }
 .entry-content > :first-child { margin-top: 0; }
 .entry-content > :last-child { margin-bottom: 0; }
-/* Page content sits in one centred column; text inside stays left-justified.
-   Calendar frames, document lists and wide/full blocks use the whole card. */
-/* :not() lifts specificity above element rules like ".entry-content figure". */
-.entry-content > :not(.mfm-docs) {
-  max-width: var(--column);
-  margin-left: auto;
-  margin-right: auto;
-}
-.entry-content > .alignwide,
-.entry-content > .alignfull,
-.entry-content > iframe[src*="calendar.google.com"],
-.entry-content > :has(iframe[src*="calendar.google.com"]) { max-width: none; }
+/* Stand-alone images are centred, as in mfm-classic. */
+.entry-content > figure.wp-block-image,
+.entry-content > p:has(> img:only-child),
+.entry-content > p:has(> a:only-child > img) { text-align: center; }
+.entry-content > figure.wp-block-image { margin-left: auto; margin-right: auto; }
 
 .entry-content ul,
 .entry-content ol { padding-left: 1.4em; }
