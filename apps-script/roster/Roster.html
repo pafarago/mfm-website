@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --ink:#1f2933; --muted:#5f6b78; --line:#dde3ea; --head:#f1f4f8; --hover:#eef4fb;
+          --accent:#1d5fa8; --danger:#b42318; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; font:15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:#fff; }
+  main { height:100%; display:flex; flex-direction:column; max-width:80rem; margin:0 auto; padding:1rem 1.25rem; }
+  header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; }
+  h1 { font-size:1.5rem; margin:0; }
+  .who { color:var(--muted); font-size:.85rem; display:flex; align-items:center; gap:.6rem; }
+  .who button { padding:.25rem .6rem; font-size:.85rem; }
+  .toolbar { display:flex; gap:.5rem; align-items:center; margin:.75rem 0 .4rem; flex-wrap:wrap; }
+  #q { flex:1 1 18rem; max-width:26rem; }
+  .toggle { display:flex; align-items:center; gap:.35rem; color:var(--muted); font-size:.9rem; margin-left:.5rem; cursor:pointer; }
+  input[type=search], input[type=text], input[type=email], input[type=tel], input[type=password] {
+    width:100%; padding:.5rem .65rem; font:inherit; border:1px solid #b8c4d1; border-radius:5px; background:#fff; }
+  input:focus, button:focus-visible, tr:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  button { font:inherit; padding:.45rem .9rem; border-radius:5px; border:1px solid #b8c4d1; background:#fff; cursor:pointer; white-space:nowrap; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:var(--danger); border-color:#f0b7b0; margin-left:auto; }
+  button.restore { color:#1e7b34; border-color:#9fd3ae; margin-left:auto; }
+  button:disabled { opacity:.55; cursor:default; }
+  .info { color:var(--muted); font-size:.9rem; margin-bottom:.5rem; min-height:1.3rem; }
+  .ok { color:#1e7b34; } .err { color:var(--danger); font-weight:600; }
+
+  /* Sign-in */
+  #signin { max-width:22rem; margin:3rem auto 0; width:100%; }
+  #signin form { border:1px solid var(--line); border-radius:8px; padding:1.25rem; }
+  #signin h2 { margin:0 0 1rem; font-size:1.15rem; }
+  #signin .row { margin-bottom:.75rem; }
+  #signin button { width:100%; margin-top:.25rem; }
+  #signinMsg { min-height:1.3rem; margin-top:.75rem; }
+
+  /* Grid */
+  #app { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .grid { flex:1; min-height:12rem; overflow:auto; border:1px solid var(--line); border-radius:4px; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  th, td { padding:.45rem .6rem; border-bottom:1px solid var(--line); border-right:1px solid var(--line);
+           text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  th:last-child, td:last-child { border-right:0; }
+  thead th { position:sticky; top:0; z-index:1; background:var(--head); font-weight:600; padding:0; }
+  thead th button { width:100%; text-align:left; border:0; border-radius:0; background:none; padding:.5rem .6rem; font-weight:600; }
+  thead th button:hover { background:#e4e9f0; }
+  .arrow { color:var(--muted); font-size:.8em; margin-left:.25rem; }
+  tbody tr { cursor:pointer; }
+  tbody tr:nth-child(even) { background:#fafbfc; }
+  tbody tr:hover { background:var(--hover); }
+  tr.archived td { color:#8a95a1; font-style:italic; }
+  .tag { font-style:normal; font-size:.75rem; border:1px solid #c9d1da; border-radius:3px; padding:0 .3rem; margin-left:.4rem; color:var(--muted); }
+  td.empty { color:var(--muted); cursor:default; text-align:center; padding:1.5rem; }
+  col.c-email { width:24%; } col.c-first { width:13%; } col.c-last { width:15%; }
+  col.c-phone { width:13%; } col.c-address { width:35%; }
+
+  /* Edit dialog */
+  dialog { border:0; border-radius:8px; padding:0; width:min(40rem, 94vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(15,23,42,.35); }
+  dialog form { padding:1.1rem 1.25rem 1rem; }
+  dialog h2 { margin:0 0 .9rem; font-size:1.15rem; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:.65rem 1rem; }
+  .full { grid-column:1 / -1; }
+  .csz { grid-column:1 / -1; display:grid; grid-template-columns:2fr .6fr 1fr; gap:.65rem; }
+  label { display:block; font-size:.8rem; color:var(--muted); margin-bottom:.15rem; }
+  .actions { display:flex; gap:.5rem; margin-top:1rem; }
+  .meta { color:var(--muted); font-size:.78rem; margin-top:.6rem; }
+  .notice { background:#fff7e6; border:1px solid #f3d9a4; border-radius:5px; padding:.4rem .6rem; font-size:.85rem; margin-bottom:.8rem; }
+  .dlg-err { margin-top:.6rem; min-height:1.2rem; }
+  .field-err { color:var(--danger); font-size:.78rem; margin-top:.2rem; }
+  .field-err:empty { display:none; }
+  input[aria-invalid="true"] { border-color:var(--danger); }
+  #ask { width:min(26rem, 92vw); }
+  #ask .ask-body { padding:1.25rem 1.25rem 1rem; }
+  #askMsg { margin:0 0 1.1rem; font-size:1rem; line-height:1.45; }
+  #ask .ask-actions { display:flex; gap:.5rem; justify-content:flex-end; flex-wrap:wrap; }
+  button.danger-solid { background:var(--danger); border-color:var(--danger); color:#fff; }
+  footer { color:#9aa5b1; font-size:.75rem; text-align:right; padding-top:.4rem; }
+  body.signed-out header { justify-content:center; margin-top:2.5rem; }
+  body.signed-out #signin { margin-top:1.25rem; }
+  body.signed-out footer { text-align:center; padding-top:.75rem; }
+  footer .warn { color:var(--danger); font-weight:600; }
+  [hidden] { display:none !important; }
+  @media (max-width: 40rem) { .fields, .csz { grid-template-columns:1fr; } .full, .csz { grid-column:auto; } }
+</style>
+</head>
+<body class="signed-out">
+<main>
+  <header>
+    <h1>MFM Roster Editor</h1>
+    <span class="who" id="who" hidden><span id="whoEmail"></span><button id="signOutBtn" type="button">Sign out</button></span>
+  </header>
+
+  <!-- Sign-in -->
+  <section id="signin">
+    <form id="signinForm" autocomplete="on" novalidate>
+      <h2>Sign in</h2>
+      <div class="row"><label for="s_email">Email</label><input id="s_email" type="email" autocomplete="username"></div>
+      <div class="row"><label for="s_pin">Password</label><input id="s_pin" type="password" maxlength="64" autocomplete="current-password"></div>
+      <button id="signinBtn" class="primary" type="submit">Sign in</button>
+      <div id="signinMsg" role="alert"></div>
+    </form>
+  </section>
+
+  <!-- Roster -->
+  <section id="app" hidden>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Search by name, email or ZIP" aria-label="Search" autocomplete="off">
+      <button id="clearBtn" type="button">Clear</button>
+      <button id="addBtn" class="primary" type="button">Add person</button>
+      <label class="toggle"><input id="showArchived" type="checkbox"> Show archived</label>
+    </div>
+    <div class="info"><span id="count"></span> <span id="status" role="status" aria-live="polite"></span></div>
+
+    <div class="grid">
+      <table>
+        <colgroup>
+          <col class="c-email"><col class="c-first"><col class="c-last"><col class="c-phone"><col class="c-address">
+        </colgroup>
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer id="version"></footer>
+</main>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form id="form" autocomplete="off" novalidate>
+    <h2 id="dlgTitle"></h2>
+    <div class="notice" id="archivedNotice" hidden>This person is archived. They aren't shown in the roster unless "Show archived" is on.</div>
+    <div class="fields">
+      <!-- Neutral ids, unrecognized autocomplete values and broken-up label text keep browsers
+           (Chrome, Edge, Firefox, Safari) from offering the clerk's own saved name/address here. -->
+      <div><label for="r_a">First na&#8203;me</label><input id="r_a" type="text" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+      <div><label for="r_b">Last na&#8203;me</label><input id="r_b" type="text" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+      <div><label for="r_c">E&#8203;mail (required)</label><input id="r_c" type="text" inputmode="email" autocapitalize="off" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+      <div><label for="r_d">Ph&#8203;one</label><input id="r_d" type="text" inputmode="tel" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"><div class="field-err" id="e_phone"></div></div>
+      <div class="full"><label for="r_e">Add&#8203;ress line 1</label><input id="r_e" type="text" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+      <div class="full"><label for="r_f">Add&#8203;ress line 2</label><input id="r_f" type="text" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+      <div class="csz">
+        <div><label for="r_g">Ci&#8203;ty</label><input id="r_g" type="text" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+        <div><label for="r_h">St&#8203;ate</label><input id="r_h" type="text" maxlength="2" autocapitalize="characters" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"></div>
+        <div><label for="r_i">Z&#8203;IP</label><input id="r_i" type="text" inputmode="numeric" maxlength="5" autocomplete="mfm-roster" autocorrect="off" spellcheck="false"><div class="field-err" id="e_zip"></div></div>
+      </div>
+    </div>
+    <div class="dlg-err err" id="dlgErr" role="alert"></div>
+    <div class="actions">
+      <button id="saveBtn" class="primary" type="submit">Save</button>
+      <button id="cancelBtn" type="button">Cancel</button>
+      <button id="statusBtn" type="button"></button>
+    </div>
+    <div class="meta" id="meta"></div>
+  </form>
+</dialog>
+
+<dialog id="ask" aria-labelledby="askMsg">
+  <div class="ask-body">
+    <p id="askMsg"></p>
+    <div class="ask-actions">
+      <button id="askYes" type="button">Yes</button>
+      <button id="askNo" type="button">No</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  // Change this with every update, together with VERSION in Code.gs.
+  var PAGE_VERSION = '2026-11-20w25';
+  var SERVER_VERSION = '<?= serverVersion ?>';
+
+  var FIELDS = ['first', 'last', 'email', 'phone', 'address1', 'address2', 'city', 'state', 'zip'];
+  var COLUMNS = [
+    { key: 'email', label: 'Email' },
+    { key: 'first', label: 'First name' },
+    { key: 'last', label: 'Last name' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'address', label: 'Address' }
+  ];
+  var token = null;     // session; kept only in memory, so reloading the page means signing in again
+  var records = [];
+  var sortKey = 'last', sortDir = 1;
+  var current = null;   // record open in the dialog (null = adding)
+  var dirty = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  // Edit-box inputs have neutral ids (see the markup); F('city') returns the City input.
+  var FIELD_IDS = { first: 'r_a', last: 'r_b', email: 'r_c', phone: 'r_d', address1: 'r_e',
+                    address2: 'r_f', city: 'r_g', state: 'r_h', zip: 'r_i' };
+  var F = function (f) { return document.getElementById(FIELD_IDS[f]); };
+
+  /** google.script.run with the session token and shared error handling. */
+  function call(fn, args, onOk, onErr) {
+    var runner = google.script.run
+      .withSuccessHandler(onOk)
+      .withFailureHandler(function (err) {
+        var m = msg(err);
+        if (m.indexOf('SESSION:') !== -1) return sessionEnded();
+        (onErr || function (t) { setStatus(t, 'err'); })(m);
+      });
+    runner[fn].apply(runner, [token].concat(args || []));
+  }
+
+  // ---------- sign-in
+
+  function signIn(ev) {
+    ev.preventDefault();
+    var email = $('s_email').value, pin = $('s_pin').value;
+    $('signinBtn').disabled = true;
+    signinMsg('Signing in…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        token = res.token;
+        $('s_pin').value = '';
+        $('signinBtn').disabled = false;
+        signinMsg('');
+        $('whoEmail').textContent = res.email;
+        $('who').hidden = false;
+        $('signin').hidden = true;
+        $('app').hidden = false;
+        document.body.classList.remove('signed-out');
+        load();
+      })
+      .withFailureHandler(function (err) {
+        $('signinBtn').disabled = false;
+        $('s_pin').value = '';
+        signinMsg(msg(err), 'err');
+        $('s_pin').focus();
+      })
+      .signIn(email, pin);
+  }
+
+  function signOut() {
+    // The edit form covers the page, so there are never unsaved edits when Sign out is clicked.
+    google.script.run.signOut(token);
+    showSignIn('You are signed out.', 'ok');
+  }
+
+  function sessionEnded() {
+    showSignIn('Your sign-in has expired. Please sign in again.', 'err');
+  }
+
+  function showSignIn(text, kind) {
+    token = null;
+    records = [];
+    dirty = false;
+    if ($('dlg').open) $('dlg').close();
+    $('body').textContent = '';
+    $('app').hidden = true;
+    $('who').hidden = true;
+    $('signin').hidden = false;
+    document.body.classList.add('signed-out');
+    signinMsg(text, kind);
+    $('s_email').value ? $('s_pin').focus() : $('s_email').focus();
+  }
+
+  function signinMsg(text, kind) {
+    $('signinMsg').textContent = text || '';
+    $('signinMsg').className = kind || '';
+  }
+
+  // ---------- data
+
+  function load() {
+    setStatus('Loading roster…');
+    call('getRecords', [], function (rs) {
+      records = rs;
+      sortRecords();
+      renderBody();
+      setStatus('');
+    });
+  }
+
+  function addressText(r) {
+    return [r.address1, r.address2, r.city, [r.state, r.zip].filter(Boolean).join(' ')]
+      .filter(Boolean).join(', ');
+  }
+
+  function cellText(r, key) { return key === 'address' ? addressText(r) : r[key]; }
+
+  function sortValue(r, key) {
+    if (key === 'last') return (r.last + ' ' + r.first).toLowerCase();
+    if (key === 'first') return (r.first + ' ' + r.last).toLowerCase();
+    return String(cellText(r, key)).toLowerCase();
+  }
+
+  function sortRecords() {
+    records.sort(function (a, b) {
+      var x = sortValue(a, sortKey), y = sortValue(b, sortKey);
+      if (!x.trim() !== !y.trim()) return x.trim() ? -1 : 1;   // blanks always last
+      return x.localeCompare(y) * sortDir;
+    });
+  }
+
+  // Search from the beginning of each word, as the directory and contact lists do. Names split at spaces,
+  // hyphens and apostrophes; email addresses at @ . - _ +; capitals and accents are ignored. Every word typed
+  // must begin some word of the record: "pe" finds Peter and Pemberton, "pe fa" finds Peter Farago,
+  // "gmail" finds every gmail address, "2311" finds ZIPs 23112 and 23113.
+  var WORD_BREAKS = /[\s@.\-_+'\u2019,]+/;
+  function fold(t) {
+    t = String(t || '').toLowerCase();
+    return t.normalize ? t.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : t;
+  }
+  function words(t) { return fold(t).split(WORD_BREAKS).filter(Boolean); }
+
+  function matches(r, tokens) {
+    if (!tokens.length) return true;
+    var keys = words(r.first + ' ' + r.last + ' ' + r.email + ' ' + r.zip);
+    return tokens.every(function (t) {
+      return keys.some(function (k) { return k.lastIndexOf(t, 0) === 0; });   // k starts with t
+    });
+  }
+
+  function replaceRecord(saved) {
+    var i = records.findIndex(function (r) { return r.id === saved.id; });
+    if (i === -1) records.push(saved); else records[i] = saved;
+    sortRecords();
+    renderBody();
+  }
+
+  // ---------- grid
+
+  function renderHead() {
+    var tr = $('headRow');
+    tr.textContent = '';
+    COLUMNS.forEach(function (c) {
+      var th = document.createElement('th');
+      th.setAttribute('aria-sort', c.key === sortKey ? (sortDir > 0 ? 'ascending' : 'descending') : 'none');
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = c.label;
+      if (c.key === sortKey) {
+        var s = document.createElement('span');
+        s.className = 'arrow';
+        s.textContent = sortDir > 0 ? '▲' : '▼';
+        b.appendChild(s);
+      }
+      b.addEventListener('click', function () {
+        if (sortKey === c.key) sortDir = -sortDir; else { sortKey = c.key; sortDir = 1; }
+        sortRecords(); renderHead(); renderBody();
+      });
+      th.appendChild(b);
+      tr.appendChild(th);
+    });
+  }
+
+  function renderBody() {
+    var tokens = words($('q').value);
+    var showArchived = $('showArchived').checked;
+    var pool = records.filter(function (r) { return showArchived || r.status !== 'Archived'; });
+    var shown = pool.filter(function (r) { return matches(r, tokens); });
+    var archivedCount = records.filter(function (r) { return r.status === 'Archived'; }).length;
+    var tbody = $('body');
+    tbody.textContent = '';
+
+    if (!shown.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = COLUMNS.length;
+      td.className = 'empty';
+      td.textContent = pool.length ? 'No one matches that search.' : 'No one to show.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+
+    var frag = document.createDocumentFragment();
+    shown.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.tabIndex = 0;
+      if (r.status === 'Archived') tr.className = 'archived';
+      COLUMNS.forEach(function (c, ci) {
+        var td = document.createElement('td');
+        var text = cellText(r, c.key);
+        td.textContent = text;
+        if (text) td.title = text;   // full text on hover when it's cut off
+        if (ci === 0 && r.status === 'Archived') {
+          var tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = 'archived';
+          td.appendChild(tag);
+        }
+        tr.appendChild(td);
+      });
+      tr.addEventListener('click', function () { openDialog(r); });
+      tr.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); openDialog(r); }
+        if (e.key === 'ArrowDown' && tr.nextElementSibling) { e.preventDefault(); tr.nextElementSibling.focus(); }
+        if (e.key === 'ArrowUp' && tr.previousElementSibling) { e.preventDefault(); tr.previousElementSibling.focus(); }
+      });
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+
+    var active = records.length - archivedCount;
+    var total = showArchived
+      ? active + ' current and ' + archivedCount + ' archived people'
+      : active + ' people' + (archivedCount ? ' (' + archivedCount + ' archived hidden)' : '');
+    $('count').textContent = tokens.length
+      ? 'Showing ' + shown.length + ' of ' + total + '.'
+      : 'Showing ' + total + '.';
+  }
+
+  // ---------- edit dialog
+
+  function openDialog(rec) {
+    current = rec;
+    FIELDS.forEach(function (f) { F(f).value = rec ? rec[f] : ''; });
+    $('dlgTitle').textContent = rec
+      ? 'Edit ' + ([rec.first, rec.last].filter(Boolean).join(' ') || 'record')
+      : 'Add a person';
+    var archived = rec && rec.status === 'Archived';
+    $('archivedNotice').hidden = !archived;
+    $('statusBtn').hidden = !rec;
+    $('statusBtn').textContent = archived ? 'Restore' : 'Archive';
+    $('statusBtn').className = archived ? 'restore' : 'danger';
+    $('meta').textContent = rec && rec.updated
+      ? 'Last changed ' + new Date(rec.updated).toLocaleString() + (rec.updatedBy ? ' by ' + rec.updatedBy : '')
+      : '';
+    $('dlgErr').textContent = '';
+    fieldErr('phone', '');
+    fieldErr('zip', '');
+    dirty = false;
+    busy(false);
+    $('dlg').showModal();
+    F('first').focus();
+  }
+
+  function closeDialog(force) {
+    function go() {
+      dirty = false;
+      current = null;
+      $('dlg').close();
+    }
+    if (force || !dirty) return go();
+    ask('Cancel your edits and close this form?', go, true);
+  }
+
+  /**
+   * The editor's own confirmation box (instead of the browser's confirm(), which adds
+   * "An embedded page at …googleusercontent.com says"). Yes/No; calls onYes only for Yes.
+   * Esc and Enter choose No, the safe choice.
+   */
+  function ask(message, onYes, danger) {
+    var d = $('ask');
+    $('askMsg').textContent = message;
+    $('askYes').className = danger ? 'danger-solid' : 'primary';
+    function finish(yes) {
+      d.close();
+      $('askYes').onclick = $('askNo').onclick = d.oncancel = null;
+      if (yes) onYes();
+    }
+    $('askYes').onclick = function () { finish(true); };
+    $('askNo').onclick = function () { finish(false); };
+    d.oncancel = function (e) { e.preventDefault(); finish(false); };   // Esc = the safe choice
+    d.showModal();
+    $('askNo').focus();                                                // Enter = the safe choice too
+  }
+
+  // ---------- field checks (the server enforces the same rules)
+
+  function phoneDigits(p) {
+    var d = String(p || '').replace(/\D/g, '');
+    if (d.length === 11 && d.charAt(0) === '1') d = d.slice(1);   // leading 1 quietly dropped
+    return d;
+  }
+
+  function validPhoneDigits(d) {
+    function part(x) { return /^[2-9]\d\d$/.test(x) && !/^[2-9]11$/.test(x); }
+    return d.length === 10 && part(d.slice(0, 3)) && part(d.slice(3, 6));
+  }
+
+  /** Formats a valid number as (804) 555-1234; returns false if it's not blank and not valid. */
+  function checkPhone() {
+    var el = F('phone'), v = el.value.trim();
+    if (!v) { el.value = ''; fieldErr('phone', ''); return true; }
+    var d = phoneDigits(v);
+    if (validPhoneDigits(d)) {
+      el.value = '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6);
+      fieldErr('phone', '');
+      return true;
+    }
+    fieldErr('phone', 'Enter a 10-digit US number with a valid area code, or leave it blank.');
+    return false;
+  }
+
+  function checkZip() {
+    var el = F('zip'), v = el.value.trim();
+    el.value = v;
+    if (!v || /^\d{5}$/.test(v)) { fieldErr('zip', ''); return true; }
+    fieldErr('zip', 'ZIP should be 5 digits.');
+    return false;
+  }
+
+  /** Tidies the address fields on the server (same rules as on save) and shows the result. */
+  var lastTidy = '';
+  function tidyAddress() {
+    if (!token) return;
+    var sent = { address1: F('address1').value, address2: F('address2').value, city: F('city').value };
+    if (!sent.address1 && !sent.address2 && !sent.city) return;
+    var key = JSON.stringify(sent);
+    if (key === lastTidy) return;
+    lastTidy = key;
+    call('tidyFields', [sent], function (t) {
+      ['address1', 'address2', 'city'].forEach(function (f) {
+        var el = F(f);
+        if (el.value === sent[f] && t[f] !== sent[f]) el.value = t[f];   // skip a field typed in meanwhile
+      });
+    }, function () { /* the save does the same tidy-up, so a failure here is harmless */ });
+  }
+
+  function showVersion() {
+    var el = $('version');
+    if (SERVER_VERSION === PAGE_VERSION) {
+      el.textContent = 'Version ' + PAGE_VERSION;
+    } else {
+      el.innerHTML = '';
+      var w = document.createElement('span');
+      w.className = 'warn';
+      w.textContent = 'Version mismatch: Code.gs is ' + SERVER_VERSION + ', Roster.html is ' + PAGE_VERSION + '.';
+      el.appendChild(w);
+    }
+  }
+
+  function fieldErr(f, text) {
+    $('e_' + f).textContent = text;
+    F(f).setAttribute('aria-invalid', text ? 'true' : 'false');
+  }
+
+  function save(ev) {
+    ev.preventDefault();
+    var okPhone = checkPhone(), okZip = checkZip();
+    if (!okPhone || !okZip) {
+      $('dlgErr').textContent = 'Please fix the fields marked in red.';
+      F(okPhone ? 'zip' : 'phone').focus();
+      return;
+    }
+    var rec = { id: current ? current.id : '', updated: current ? current.updated : '' };
+    FIELDS.forEach(function (f) { rec[f] = F(f).value; });
+    busy(true);
+    $('dlgErr').textContent = '';
+    call('saveRecord', [rec], function (saved) {
+      replaceRecord(saved);
+      closeDialog(true);
+      setStatus('Saved ' + [saved.first, saved.last].filter(Boolean).join(' ') + '.', 'ok');
+    }, dialogError);
+  }
+
+  function toggleStatus() {
+    var name = [current.first, current.last].filter(Boolean).join(' ') || 'this person';
+    var archiving = current.status !== 'Archived';
+    var unsaved = dirty ? ' Your edits in this form will be canceled.' : '';
+
+    function go() {
+      busy(true);
+      call('setStatus', [current.id, archiving ? 'Archived' : 'Active', current.updated], function (saved) {
+        replaceRecord(saved);
+        closeDialog(true);
+        setStatus((archiving ? 'Archived ' : 'Restored ') + name + '.', 'ok');
+      }, dialogError);
+    }
+
+    if (archiving) {
+      ask('Archive ' + name + '? They\'ll be hidden from the roster immediately and removed from the news and the directory ' +
+          'overnight. They can be restored at any time, and can rejoin through Friendly Contacts.' + unsaved, go, true);
+    } else if (dirty) {
+      ask('Restore ' + name + '?' + unsaved, go, false);   // restoring loses nothing, unless there are edits
+    } else {
+      go();
+    }
+  }
+
+  function dialogError(text) {
+    busy(false);
+    $('dlgErr').textContent = text;
+  }
+
+  // ---------- helpers
+
+  function busy(on) {
+    ['saveBtn', 'cancelBtn', 'statusBtn'].forEach(function (id) { $(id).disabled = on; });
+  }
+
+  function setStatus(text, kind) {
+    var s = $('status');
+    s.textContent = text;
+    s.className = kind || '';
+  }
+
+  function msg(err) { return (err && err.message) ? err.message : String(err); }
+
+  // ---------- wiring
+
+  $('signinForm').addEventListener('submit', signIn);
+  $('signOutBtn').addEventListener('click', signOut);
+  $('q').addEventListener('input', renderBody);
+  $('showArchived').addEventListener('change', renderBody);
+  $('clearBtn').addEventListener('click', function () { $('q').value = ''; renderBody(); $('q').focus(); });
+  $('addBtn').addEventListener('click', function () { openDialog(null); });
+  $('form').addEventListener('submit', save);
+  $('form').addEventListener('input', function () { dirty = true; });
+  $('cancelBtn').addEventListener('click', function () { closeDialog(false); });
+  $('statusBtn').addEventListener('click', toggleStatus);
+  $('dlg').addEventListener('cancel', function (e) { e.preventDefault(); closeDialog(false); }); // Esc key
+  F('state').addEventListener('input', function (e) { e.target.value = e.target.value.toUpperCase(); });
+  // Checks run when a field is left (blur) and when its value changes without typing,
+  // which is what happens when a browser autofills it.
+  ['address1', 'address2', 'city'].forEach(function (f) {
+    F(f).addEventListener('blur', tidyAddress);
+    F(f).addEventListener('change', tidyAddress);
+  });
+  F('phone').addEventListener('blur', checkPhone);
+  F('phone').addEventListener('change', checkPhone);
+  F('zip').addEventListener('blur', checkZip);
+  F('zip').addEventListener('change', checkZip);
+  F('phone').addEventListener('input', function () { fieldErr('phone', ''); });
+  F('zip').addEventListener('input', function () { fieldErr('zip', ''); });
+  window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  renderHead();
+  showVersion();
+  $('s_email').focus();
+</script>
+</body>
+</html>
