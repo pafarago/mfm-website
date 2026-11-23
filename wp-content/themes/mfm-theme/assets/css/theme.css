@@ -338,6 +338,10 @@ input[type="submit"]:hover {
 }
 
 /* 7. Menu: phone (drawer + slide-in sub-panels) ---------------------------- */
+/* On phones everything inside the nav is position:fixed, so take the nav out
+   of the header row too; otherwise it still claims a slot and pushes the
+   MENU button in from the right edge. */
+.site-nav { position: absolute; }
 .site-nav .menu { list-style: none; margin: 0; padding: 0; }
 
 .nav-backdrop {
@@ -527,6 +531,8 @@ html.nav-locked { overflow: hidden; }
   .nav-panel__foot,
   .submenu__head,
   .submenu__title { display: none; }
+
+  .site-nav { position: static; }
 
   .nav-panel {
     position: static;
