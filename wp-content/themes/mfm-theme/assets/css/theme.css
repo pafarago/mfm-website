@@ -37,6 +37,7 @@
   --fs-h3: clamp(1.125rem, 1.05rem + 0.35vw, 1.3125rem);
   --lh: 1.6;
   --measure: 68ch;
+  --column: 46rem;      /* page content column, centred in the card */
 
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
@@ -141,7 +142,7 @@ hr { border: 0; border-top: 1px solid var(--c-border); margin: var(--sp-7) 0; }
 }
 
 @media (min-width: 48em) {
-  .site-main { padding-top: var(--sp-7); }
+  .site-main { padding-top: 2.5rem; }
 }
 
 /* 4. Buttons --------------------------------------------------------------- */
@@ -195,26 +196,32 @@ input[type="submit"]:hover {
 .card + .card { margin-top: var(--sp-4); }
 
 @media (min-width: 48em) {
-  .card { padding: var(--sp-7) clamp(1.5rem, 4vw, 2.5rem); }
+  .card { padding: 2.5rem clamp(1.5rem, 4vw, 3rem); }
 }
 
 .card--page .entry-title,
 .card--post .entry-title {
-  margin: 0 0 var(--sp-4);
-  padding-bottom: var(--sp-3);
+  margin: 0 0 var(--sp-5);
+  padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--c-border-soft);
+  text-align: center;
 }
 
 .entry-content { overflow-wrap: break-word; }
 .entry-content > :first-child { margin-top: 0; }
 .entry-content > :last-child { margin-bottom: 0; }
-.entry-content > p,
-.entry-content > ul,
-.entry-content > ol,
-.entry-content > h2,
-.entry-content > h3,
-.entry-content > h4,
-.entry-content > blockquote { max-width: var(--measure); }
+/* Page content sits in one centred column; text inside stays left-justified.
+   Calendar frames, document lists and wide/full blocks use the whole card. */
+/* :not() lifts specificity above element rules like ".entry-content figure". */
+.entry-content > :not(.mfm-docs) {
+  max-width: var(--column);
+  margin-left: auto;
+  margin-right: auto;
+}
+.entry-content > .alignwide,
+.entry-content > .alignfull,
+.entry-content > iframe[src*="calendar.google.com"],
+.entry-content > :has(iframe[src*="calendar.google.com"]) { max-width: none; }
 
 .entry-content ul,
 .entry-content ol { padding-left: 1.4em; }
@@ -601,12 +608,12 @@ html.nav-locked { overflow: hidden; }
 }
 
 /* 9. Archives & posts ------------------------------------------------------ */
-.archive-header { margin-bottom: var(--sp-4); }
+.archive-header { margin-bottom: var(--sp-4); text-align: center; }
 .archive-title { margin: 0 0 var(--sp-2); }
-.archive-description { color: var(--c-muted); max-width: var(--measure); }
+.archive-description { color: var(--c-muted); max-width: var(--measure); margin: 0 auto; }
 .archive-description > :last-child { margin-bottom: 0; }
 
-.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-4); }
 .chip {
   display: inline-flex;
   align-items: center;
@@ -647,7 +654,7 @@ html.nav-locked { overflow: hidden; }
 .post-card__excerpt p { margin: 0 0 var(--sp-2); }
 .post-card__more { font-size: 1rem; font-weight: 600; }
 
-.card--post .entry-header { margin-bottom: var(--sp-4); }
+.card--post .entry-header { margin-bottom: var(--sp-4); text-align: center; }
 .card--post .entry-title { margin-top: var(--sp-1); }
 
 .back-link { margin: 0 0 var(--sp-3); font-size: 1rem; }

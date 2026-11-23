@@ -39,6 +39,9 @@
   border-bottom: 1px solid var(--d-soft);
 }
 .mfm-docs__title { margin: 0 !important; padding: 0 !important; border: 0 !important; line-height: 1.2; }
+/* Top of an entry on its own page (no Up button): centre the title like other pages. */
+.mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) { justify-content: center; }
+
 .mfm-docs__up {
   display: inline-flex;
   flex: 0 0 auto;
@@ -165,5 +168,8 @@
 .entry-content .mfm-docs__title { font-size: var(--fs-h2, 1.5rem); }
 
 @media print {
-  .mfm-docs__chips, .mfm-docs__up { display: none; }
+  .mfm-docs__chips, /* Top of an entry on its own page (no Up button): centre the title like other pages. */
+.mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) { justify-content: center; }
+
+.mfm-docs__up { display: none; }
 }
