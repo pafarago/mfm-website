@@ -1,43 +1,67 @@
 <?php
 /**
  * Plugin Name:       MFM Mail
- * Description:       Sends all WordPress email through the Google Workspace SMTP relay, from records@midlothianfriends.org.
- * Version:           1.0.0
+ * Description:       Sends all WordPress email through the Gmail API, from records@midlothianfriends.org.
+ * Version:           2.0.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            Midlothian Friends Meeting
  * License:           GPL-2.0-or-later
  *
- * The relay accepts mail from the droplet's IP address (Admin console →
- * Apps → Google Workspace → Gmail → Routing → SMTP relay service), so there
- * is no password here. Google signs the mail with the domain's DKIM key, and
- * SPF passes because it leaves from Google's servers, so DMARC passes.
+ * DigitalOcean blocks the mail ports (25, 465, 587) on droplets, so mail
+ * leaves over HTTPS instead: wp_mail() builds each message as usual, and
+ * MFM Mail hands the finished message to the Gmail API, signed in with the
+ * mfm-docs service account acting as admin@ (domain-wide delegation, scope
+ * gmail.send only). Gmail sends it From records@ (on admin@'s "Send mail as"
+ * list) and adds the DKIM signature, so SPF, DKIM and DMARC pass.
  *
  * Every message is sent From records@. If a plugin or form set some other
  * From (a visitor's address, say), that address becomes the Reply-To, so
- * "Reply" still goes to the right person and the relay never sees a From
- * outside the domain, which it would refuse.
+ * "Reply" still goes to the right person.
  *
  * Any setting can be overridden in wp-config.php, e.g.
  *   define( 'MFM_MAIL_FROM', 'admin@midlothianfriends.org' );
  *
  * Test from the shell:
  *   wp mfm-mail test you@gmail.com            send a test message
- *   wp mfm-mail test you@gmail.com --debug    also show the SMTP conversation
+ *   wp mfm-mail test you@gmail.com --debug    also show each step
  */
 
 defined( 'ABSPATH' ) || exit;
 
 defined( 'MFM_MAIL_FROM' )      || define( 'MFM_MAIL_FROM', 'records@midlothianfriends.org' );
 defined( 'MFM_MAIL_FROM_NAME' ) || define( 'MFM_MAIL_FROM_NAME', 'Midlothian Friends Meeting' );
-defined( 'MFM_MAIL_HOST' )      || define( 'MFM_MAIL_HOST', 'smtp-relay.gmail.com' );
-defined( 'MFM_MAIL_PORT' )      || define( 'MFM_MAIL_PORT', 587 );
-// The name the droplet gives itself when it connects. Google's relay turns
-// away "localhost" and other names that aren't real hostnames.
-defined( 'MFM_MAIL_HELO' )      || define( 'MFM_MAIL_HELO', 'midlothianfriends.org' );
+// The Workspace user Gmail sends as; MFM_MAIL_FROM must be this user's own
+// address or on their "Send mail as" list.
+defined( 'MFM_MAIL_ACT_AS' )    || define( 'MFM_MAIL_ACT_AS', 'admin@midlothianfriends.org' );
+// The same key file mfm-docs uses (root:www-data, mode 640, outside the web root).
+defined( 'MFM_MAIL_KEY_FILE' )  || define( 'MFM_MAIL_KEY_FILE', '/var/opt/GoogleAPI/google-service-account.json' );
 
-/** Set by `wp mfm-mail test --debug` to print the SMTP conversation. */
+require_once __DIR__ . '/includes/class-mfm-mail-gmail.php';
+
+/** Set by `wp mfm-mail test --debug` to print each step. */
 $GLOBALS['mfm_mail_debug'] = false;
+
+/**
+ * Make sure wp_mail() uses our mailer. pre_wp_mail runs at the start of every
+ * wp_mail() call, before WordPress creates its own PHPMailer, so WordPress
+ * finds ours and uses it. Returning null lets wp_mail() carry on as usual.
+ */
+add_filter( 'pre_wp_mail', 'mfm_mail_install_mailer', 1 );
+function mfm_mail_install_mailer( $short_circuit ) {
+	global $phpmailer;
+	if ( null === $short_circuit && ! ( $phpmailer instanceof MFM_Mail_Mailer ) ) {
+		require_once ABSPATH . WPINC . '/PHPMailer/PHPMailer.php';
+		require_once ABSPATH . WPINC . '/PHPMailer/Exception.php';
+		require_once __DIR__ . '/includes/class-mfm-mail-mailer.php';
+		$phpmailer = new MFM_Mail_Mailer( true );
+		// Same address check WordPress sets on its own mailer.
+		$phpmailer::$validator = static function ( $email ) {
+			return (bool) is_email( $email );
+		};
+	}
+	return $short_circuit;
+}
 
 add_action( 'phpmailer_init', 'mfm_mail_configure' );
 /**
@@ -54,26 +78,13 @@ function mfm_mail_configure( $mailer ): void {
 		$mailer->addReplyTo( $given_from, 'WordPress' === $given_name ? '' : $given_name );
 	}
 
-	// From header and envelope sender (where bounces go) are both records@.
 	$mailer->setFrom( MFM_MAIL_FROM, MFM_MAIL_FROM_NAME, false );
 	$mailer->Sender = MFM_MAIL_FROM;
 
-	$mailer->isSMTP();
-	$mailer->Host        = MFM_MAIL_HOST;
-	$mailer->Port        = (int) MFM_MAIL_PORT;
-	$mailer->SMTPSecure  = 'tls';   // STARTTLS on 587
-	$mailer->SMTPAutoTLS = true;
-	$mailer->SMTPAuth    = false;   // the relay checks the droplet's IP instead
-	$mailer->Hostname    = MFM_MAIL_HELO;
-	$mailer->Helo        = MFM_MAIL_HELO;
-	$mailer->Timeout     = 15;
-
-	if ( $GLOBALS['mfm_mail_debug'] ) {
-		$mailer->SMTPDebug   = 2;
-		$mailer->Debugoutput = static function ( $line ) {
-			fwrite( STDERR, rtrim( (string) $line ) . "\n" );
-		};
-	}
+	// Build the message as for sendmail, so To, Subject and Bcc are in the
+	// headers we hand to Gmail (Gmail delivers to Bcc and then drops that
+	// header). Nothing is passed to a sendmail program: our postSend() sends.
+	$mailer->Mailer = 'sendmail';
 }
 
 // Failures go to the PHP error log, so a silent "password reset never came"
@@ -87,7 +98,7 @@ add_action( 'wp_mail_failed', static function ( WP_Error $error ): void {
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	/**
-	 * Send a test message through the relay.
+	 * Send a test message through the Gmail API.
 	 *
 	 * ## OPTIONS
 	 *
@@ -95,7 +106,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	 * : Address to send to. Default: the site's admin email.
 	 *
 	 * [--debug]
-	 * : Show the SMTP conversation with the relay.
+	 * : Show the sign-in and send steps and Google's answers.
 	 *
 	 * @param array<int,string>    $args
 	 * @param array<string,string> $assoc
@@ -113,13 +124,12 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		} );
 
 		$body = sprintf(
-			"Test message from %s, sent %s through %s:%d as %s.\n\n" .
+			"Test message from %s, sent %s through the Gmail API as %s, acting as %s.\n\n" .
 			"In Gmail, open the message, choose Show original, and check SPF, DKIM and DMARC all say PASS.\n",
 			home_url(),
 			wp_date( 'D j M Y H:i T' ),
-			MFM_MAIL_HOST,
-			(int) MFM_MAIL_PORT,
-			MFM_MAIL_FROM
+			MFM_MAIL_FROM,
+			MFM_MAIL_ACT_AS
 		);
 
 		if ( wp_mail( $to, 'MFM website: mail test', $body ) ) {

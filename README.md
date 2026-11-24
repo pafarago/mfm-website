@@ -7,7 +7,7 @@ The folders mirror the server's `wp-content`, so a path here is the same path th
 wp-content/
   themes/mfm-theme/      phone-first theme (replaces mfm-classic)
   plugins/mfm-docs/      Drive document lists and cached PDF/Word copies (replaces embed-all-shortcode)
-  plugins/mfm-mail/      sends WordPress mail through the Google Workspace SMTP relay
+  plugins/mfm-mail/      sends WordPress mail through the Gmail API, From records@
 site/                    standalone pages and files served from the web root
                          (site/update/ → /update/, site/logo.png → /logo.png)
 deploy/
@@ -96,7 +96,7 @@ git push origin main
 | Roll back to a named release | `ssh … /srv/mfm/bin/rollback.sh 20261121-153000-abc1234` |
 | Deploy log | `ssh … tail -50 /srv/mfm/deploy.log` |
 | Relink after moving an old folder aside | `ssh … /srv/mfm/bin/link.sh` |
-| Test site email | `ssh … 'cd /var/www/midlothianfriends && wp mfm-mail test you@gmail.com'` |
+| Test site email | `cd /var/www/midlothianfriends && sudo -u www-data wp mfm-mail test you@gmail.com` (on the droplet) |
 
 Rolling back changes only what is live, not git. Fix forward with a new
 commit, or `git revert`, and push.
@@ -114,22 +114,28 @@ commit, or `git revert`, and push.
 
 ## Email (mfm-mail)
 
-WordPress has no local mail server. MFM Mail sends every message through
-Google Workspace's SMTP relay (`smtp-relay.gmail.com:587`, STARTTLS), which
-accepts mail from the droplet's IP address without a password. All mail goes
-out From `records@midlothianfriends.org`; a different From set by a form or
-plugin becomes the Reply-To. Google adds the DKIM signature, so SPF, DKIM
-and DMARC pass.
+WordPress has no local mail server, and DigitalOcean blocks the mail ports
+(25, 465, 587) on droplets, so MFM Mail sends over HTTPS instead. WordPress
+builds each message as usual; MFM Mail hands the finished message to the
+Gmail API, signed in with the mfm-docs service account acting as
+admin@midlothianfriends.org. Every message goes out From
+`records@midlothianfriends.org`; a different From set by a form or plugin
+becomes the Reply-To. Gmail adds the DKIM signature, so SPF, DKIM and DMARC
+pass.
 
-The relay entry lives in the Admin console: Apps → Google Workspace → Gmail
-→ Routing → SMTP relay service ("droplet"): allowed senders *Only addresses
-in my domains*, *Only accept mail from the specified IP addresses*
-(45.55.207.140, plus the droplet's IPv6 address if it has one), *Require TLS
-encryption* on. If the droplet's IP ever changes, update it there.
+What it depends on (set up 24 Nov 2026):
 
-`wp mfm-mail test you@gmail.com --debug` sends a test and shows the SMTP
-conversation. Failures are logged with the prefix `mfm-mail:` in the PHP
-error log.
+| Where | Setting |
+|---|---|
+| Droplet | key file `/var/opt/GoogleAPI/google-service-account.json`, `root:www-data`, mode 640 |
+| Cloud Console, project mfm-website-472810 | Gmail API enabled |
+| Admin console → Security → API controls → Domain Wide Delegation | the service account's client ID, scope `https://www.googleapis.com/auth/gmail.send` only |
+| Gmail as admin@ → Settings → Accounts → Send mail as | records@midlothianfriends.org |
+
+`wp mfm-mail test you@gmail.com --debug` sends a test and shows each step
+and Google's answers. Failures are logged with the prefix `mfm-mail:` in the
+PHP error log. `MFM_MAIL_FROM`, `MFM_MAIL_FROM_NAME`, `MFM_MAIL_ACT_AS` and
+`MFM_MAIL_KEY_FILE` can be overridden in `wp-config.php`.
 
 ## Documents (mfm-docs)
 
