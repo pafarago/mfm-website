@@ -6,6 +6,10 @@ BASE=/srv/mfm
 # The live WordPress wp-content folder.
 WP_CONTENT=/var/www/midlothianfriends/wp-content
 
+# The web root, where the repo's site/ pages are linked. Defaults to the
+# folder above WP_CONTENT, so an older deploy.conf without it still works.
+WEB_ROOT=/var/www/midlothianfriends
+
 # Only pushes to this branch are deployed.
 BRANCH=main
 

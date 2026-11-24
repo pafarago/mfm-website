@@ -6,6 +6,9 @@
 # push is rejected and the live site is unchanged.
 #
 # Pushes to other branches are stored but not deployed.
+#
+# The repo's wp-content/ themes and plugins and its site/ pages are linked
+# into the live WordPress by /srv/mfm/bin/link.sh (deploy/link.sh).
 
 set -euo pipefail
 umask 022
@@ -81,17 +84,30 @@ while IFS= read -r -d '' cj; do
 done < <(find "$REL/wp-content" -name composer.json -not -path '*/vendor/*' -print0)
 
 # ---------------------------------------------------------------------------
-# 3. Syntax-check every PHP file we ship (not third-party vendor code).
+# 3. Syntax-check every PHP file we ship (not third-party vendor code), and
+#    make sure nothing in site/ would shadow WordPress in the web root.
 # ---------------------------------------------------------------------------
 command -v php >/dev/null || fail "php is not installed"
+ship=("$REL/wp-content")
+[ -d "$REL/site" ] && ship+=("$REL/site")
 lint_errors=0
 while IFS= read -r -d '' f; do
     if ! out=$(php -l "$f" 2>&1); then
         printf '%s\n' "$out" >&2
         lint_errors=1
     fi
-done < <(find "$REL/wp-content" -name '*.php' -not -path '*/vendor/*' -print0)
+done < <(find "${ship[@]}" -name '*.php' -not -path '*/vendor/*' -print0)
 [ "$lint_errors" -eq 0 ] || fail "PHP syntax errors (listed above)"
+
+if [ -d "$REL/site" ]; then
+    for p in "$REL"/site/* "$REL"/site/.[!.]*; do
+        [ -e "$p" ] || continue
+        case $(basename "$p") in
+            wp-*|.*|index.php|xmlrpc.php|license.txt|readme.html)
+                fail "site/$(basename "$p") would shadow a WordPress file in the web root; rename or remove it" ;;
+        esac
+    done
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Switch live: repoint "current" in one atomic rename.
@@ -104,39 +120,13 @@ SWITCHED=1
 log "Live: $(basename "$REL")${previous:+ (was $(basename "$previous"))}"
 
 # ---------------------------------------------------------------------------
-# 5. Make sure WordPress sees each theme/plugin the repo manages.
-#    Links point through "current", so they never need changing on deploy.
-#    A real (non-link) folder of the same name is never replaced.
+# 5. Link themes, plugins and site/ pages into place (see link.sh).
 # ---------------------------------------------------------------------------
-ensure_link() {
-    local rel=$1 dest="$WP_CONTENT/$1" src="$CURRENT/wp-content/$1"
-    if [ -L "$dest" ]; then
-        [ "$(readlink "$dest")" = "$src" ] || { ln -sfn "$src" "$dest"; log "relinked $rel"; }
-    elif [ -e "$dest" ]; then
-        log "WARNING: $dest is a real folder; left alone"
-    else
-        if ln -s "$src" "$dest"; then
-            log "linked $rel"
-        else
-            log "WARNING: could not link $rel (permissions?)"
-        fi
-    fi
-}
-
-for d in "$CURRENT"/wp-content/themes/*/; do
-    [ -f "$d/style.css" ] && ensure_link "themes/$(basename "$d")"
-done
-for d in "$CURRENT"/wp-content/plugins/*/; do
-    compgen -G "$d*.php" >/dev/null && ensure_link "plugins/$(basename "$d")"
-done
-
-# Remove our own links whose theme/plugin is no longer in the repo.
-for link in "$WP_CONTENT"/themes/* "$WP_CONTENT"/plugins/*; do
-    [ -L "$link" ] || continue
-    case $(readlink "$link") in
-        "$CURRENT"/*) [ -e "$link" ] || { rm -f -- "$link"; log "unlinked ${link#"$WP_CONTENT"/} (removed from repo)"; } ;;
-    esac
-done
+if [ -x "$BASE/bin/link.sh" ]; then
+    "$BASE/bin/link.sh" || log "WARNING: link.sh failed; run $BASE/bin/link.sh by hand"
+else
+    log "WARNING: $BASE/bin/link.sh is missing; re-run server-setup.sh"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Let PHP pick up the new files (opcache / realpath cache).

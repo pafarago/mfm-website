@@ -11,7 +11,8 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 BASE=/srv/mfm
-WP_CONTENT=/var/www/midlothianfriends/wp-content
+WEB_ROOT=/var/www/midlothianfriends
+WP_CONTENT=$WEB_ROOT/wp-content
 DOC_CACHE=/var/cache/mfm-docs
 ME=$(id -un)
 
@@ -28,9 +29,10 @@ fi
 git --git-dir="$BASE/repo.git" config receive.denyDeletes true
 git --git-dir="$BASE/repo.git" config receive.denyNonFastForwards false
 
-say "Hook and rollback script"
+say "Hook, link and rollback scripts"
 install -m 755 "$HERE/hooks/pre-receive" "$BASE/repo.git/hooks/pre-receive"
 install -m 755 "$HERE/rollback.sh" "$BASE/bin/rollback.sh"
+install -m 755 "$HERE/link.sh" "$BASE/bin/link.sh"
 if [ ! -f "$BASE/deploy.conf" ]; then
     install -m 644 "$HERE/deploy.conf.example" "$BASE/deploy.conf"
     echo "Created $BASE/deploy.conf from the example. Review it."
@@ -38,9 +40,9 @@ else
     echo "$BASE/deploy.conf already exists; left as is."
 fi
 
-say "Let $ME create links in wp-content/themes and wp-content/plugins"
+say "Let $ME create links in the web root, wp-content/themes and wp-content/plugins"
 command -v setfacl >/dev/null || sudo apt-get install -y acl
-sudo setfacl -m "u:$ME:rwx" "$WP_CONTENT/themes" "$WP_CONTENT/plugins"
+sudo setfacl -m "u:$ME:rwx" "$WEB_ROOT" "$WP_CONTENT/themes" "$WP_CONTENT/plugins"
 
 say "Document cache $DOC_CACHE (www-data only, outside the web root)"
 sudo mkdir -p "$DOC_CACHE"

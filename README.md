@@ -7,15 +7,20 @@ The folders mirror the server's `wp-content`, so a path here is the same path th
 wp-content/
   themes/mfm-theme/      phone-first theme (replaces mfm-classic)
   plugins/mfm-docs/      Drive document lists and cached PDF/Word copies (replaces embed-all-shortcode)
+  plugins/mfm-mail/      sends WordPress mail through the Google Workspace SMTP relay
+site/                    standalone pages and files served from the web root
+                         (site/update/ → /update/, site/logo.png → /logo.png)
 deploy/
   hooks/pre-receive      build, check and switch a release on push
+  link.sh                link themes, plugins and site/ into place
   rollback.sh            switch back to an earlier release
   server-setup.sh        one-time droplet setup (safe to re-run)
   deploy.conf.example    settings, copied to /srv/mfm/deploy.conf
 ```
 
 Only folders in this repo are managed. Everything else in `wp-content`
-(uploads, other plugins, the old theme) is never touched.
+(uploads, other plugins, the old theme) and in the web root (WordPress
+itself, `.htaccess`, `.well-known`) is never touched.
 
 ## How deploying works
 
@@ -25,18 +30,27 @@ WSL:  git push droplet main
 droplet /srv/mfm/repo.git  ── pre-receive hook
         1. checks out the commit into /srv/mfm/releases/<time>-<commit>/
         2. composer install --no-dev   (only where composer.json exists)
-        3. php -l on every PHP file we ship
+        3. php -l on every PHP file we ship; no site/ name may shadow
+           WordPress (wp-*, dotfiles, index.php, xmlrpc.php …)
            └─ any failure: push rejected, live site unchanged
         4. /srv/mfm/current → new release   (one atomic rename)
-        5. wp-content/themes/<name>, wp-content/plugins/<name>
-           are links into /srv/mfm/current/wp-content/…
+        5. link.sh: wp-content/themes/<name>, wp-content/plugins/<name>
+           and <web root>/<name> for each entry in site/ are links
+           into /srv/mfm/current/…
         6. reloads PHP so cached paths refresh
         7. keeps the newest 5 releases
 ```
 
 A theme folder is linked once it has a `style.css`; a plugin folder once it
-has a top-level `.php` file. A real (non-link) folder with the same name in
-`wp-content` is never replaced, so the old site keeps running until cutover.
+has a top-level `.php` file; anything at the top of `site/` always. A real
+(non-link) file or folder with the same name is never replaced, so the old
+copy keeps running until you move it aside, and links for things no longer
+in the live release are removed. `rollback.sh` runs `link.sh` too, and you
+can run `/srv/mfm/bin/link.sh` by hand at any time.
+
+Files in a release are read-only to WordPress (owned by your login). A
+standalone page must not write files next to itself; keep any data it
+writes outside `site/`.
 
 `vendor/` is never committed; the hook builds it on the server. Do commit
 `composer.lock`, so the server installs exactly the versions you tested.
@@ -81,6 +95,8 @@ git push origin main
 | Roll back one release | `ssh … /srv/mfm/bin/rollback.sh` |
 | Roll back to a named release | `ssh … /srv/mfm/bin/rollback.sh 20261121-153000-abc1234` |
 | Deploy log | `ssh … tail -50 /srv/mfm/deploy.log` |
+| Relink after moving an old folder aside | `ssh … /srv/mfm/bin/link.sh` |
+| Test site email | `ssh … 'cd /var/www/midlothianfriends && wp mfm-mail test you@gmail.com'` |
 
 Rolling back changes only what is live, not git. Fix forward with a new
 commit, or `git revert`, and push.
@@ -95,6 +111,25 @@ commit, or `git revert`, and push.
 | `/srv/mfm/deploy.conf` | settings |
 | `/srv/mfm/deploy.log` | deploy and rollback history |
 | `/var/cache/mfm-docs` | document cache used by mfm-docs (www-data only) |
+
+## Email (mfm-mail)
+
+WordPress has no local mail server. MFM Mail sends every message through
+Google Workspace's SMTP relay (`smtp-relay.gmail.com:587`, STARTTLS), which
+accepts mail from the droplet's IP address without a password. All mail goes
+out From `records@midlothianfriends.org`; a different From set by a form or
+plugin becomes the Reply-To. Google adds the DKIM signature, so SPF, DKIM
+and DMARC pass.
+
+The relay entry lives in the Admin console: Apps → Google Workspace → Gmail
+→ Routing → SMTP relay service ("droplet"): allowed senders *Only addresses
+in my domains*, *Only accept mail from the specified IP addresses*
+(45.55.207.140, plus the droplet's IPv6 address if it has one), *Require TLS
+encryption* on. If the droplet's IP ever changes, update it there.
+
+`wp mfm-mail test you@gmail.com --debug` sends a test and shows the SMTP
+conversation. Failures are logged with the prefix `mfm-mail:` in the PHP
+error log.
 
 ## Documents (mfm-docs)
 

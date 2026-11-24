@@ -50,6 +50,9 @@ ln -sfn "$to" "$CURRENT.new"
 mv -Tf "$CURRENT.new" "$CURRENT"
 log "ROLLBACK: live is now $(basename "$to") (was $(basename "$live"))"
 
+# Add or remove links for anything that differs between the two releases.
+"$BASE/bin/link.sh" || log "WARNING: link.sh failed; run $BASE/bin/link.sh by hand"
+
 if [ -n "$RELOAD_CMD" ]; then
     eval "$RELOAD_CMD" || log "WARNING: reload command failed"
 fi
