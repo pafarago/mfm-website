@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  /directory/ (w25): the directory has been merged into Friendly Contacts. This page says so and, after
+  5 seconds or on "Go now", opens /update/ in the same tab. A sign-in or cancel link from an older
+  email (#k=... or #x=...) is passed through unchanged, so links already sent still work.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The directory has moved · Midlothian Friends Meeting</title>
+<style>
+  :root { --ink:#1f2933; --muted:#5f6b78; --bg:#f5f5f7; --go:#1E7B34; --go-press:#17652a;
+          --fs: clamp(17px, 4.4vw, 21px); --fs-h: clamp(25px, 6.6vw, 34px); --gap: clamp(12px, 2.4vh, 24px); }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:var(--fs)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width:34rem; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+         padding:max(calc(var(--gap) * 1.2), env(safe-area-inset-top)) 18px max(var(--gap), env(safe-area-inset-bottom)); }
+  .logo { display:block; width:clamp(160px, 52vw, 220px); height:auto; margin:0 auto .6em; }
+  .org { font-size:.85em; font-weight:600; color:var(--muted); text-align:center; }
+  h1 { font-size:var(--fs-h); line-height:1.2; margin:.15em 0 var(--gap); text-align:center; }
+  p { margin:0 0 var(--gap); }
+  .grow { flex:1; min-height:var(--gap); }
+  button { font:inherit; font-size:1.05em; font-weight:600; min-height:clamp(52px, 7vh, 64px); border:0; border-radius:16px;
+           width:100%; cursor:pointer; padding:.5em .8em; background:var(--go); color:#fff; }
+  button:active { background:var(--go-press); }
+  button:focus-visible { outline:3px solid rgba(29,95,168,.5); outline-offset:2px; }
+  footer { text-align:center; font-size:.7em; color:#9aa5b1; margin-top:var(--gap); }
+  @media (min-width: 700px) { .grow { flex:0 0 var(--gap); } main { padding-top:6vh; } }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/logo.png" alt="Quakers, Midlothian Friends Meeting" onload="document.querySelector('.org').hidden = true" onerror="this.remove()">
+  <div class="org">Midlothian Friends Meeting</div>
+  <h1>The directory has moved</h1>
+  <p>The Meeting directory has been merged into Friendly Contacts. Taking you there in <b id="secs">5</b> seconds.</p>
+  <div class="grow"></div>
+  <button id="goNow" type="button">Go now</button>
+  <footer id="ver"></footer>
+</main>
+<script>
+  var PAGE_VERSION = '2026-11-20w25';
+  document.getElementById('ver').textContent = 'Version ' + PAGE_VERSION;
+  // Keep any sign-in (#k=) or cancel (#x=) key from an older email; otherwise plain /update/.
+  var keep = /[#&]([kx]=[A-Za-z0-9_-]{16,400})/.exec(location.hash);
+  var target = '/update/' + (keep ? '#' + keep[1] : '');
+  // Take the key out of this page's address and history right away; replace() below keeps it out of Back.
+  if (keep) history.replaceState(null, '', location.pathname + location.search);
+  function goNow() { location.replace(target); }
+  document.getElementById('goNow').addEventListener('click', goNow);
+  var left = 5;
+  var timer = setInterval(function () {
+    left--;
+    document.getElementById('secs').textContent = String(Math.max(left, 0));
+    if (left <= 0) { clearInterval(timer); goNow(); }
+  }, 1000);
+</script>
+</body>
+</html>

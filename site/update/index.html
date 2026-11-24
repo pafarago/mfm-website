@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<!--
+  Friendly Contacts: members review and update their contact information and choices, or join the roster.
+  w25: also the Meeting directory. Members with directory access get a home screen (My information, Directory);
+  everyone else goes straight to My information. The terms of use are agreed each time the directory opens.
+  The old /directory/ page forwards here. Close Friendly Contacts signs out and loads the website's home page.
+  Host this on the MFM website as /update/index.html. It talks to the Roster Editor's Apps Script project;
+  SCRIPT_URL below is that project's web app address (the /exec address).
+  Sign-in is by email, with either a one-time security code or a one-time link (the script's SIGNIN_METHOD
+  setting decides; while testing, /update/ asks for a link and /update/?code for a code). A link opens
+  this page with its key after "#k=", and the page signs in with it as it opens.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Midlothian Friends Meeting</title>
+<style>
+  :root {
+    --ink:#1f2933; --muted:#5f6b78; --line:#cfd8e3; --bg:#f5f5f7; --card:#ffffff;
+    --go:#1E7B34; --go-press:#17652a; --stop:#111111; --error:#b42318; --link:#1d5fa8;
+    /* Type scales with the screen: a floor for small phones, a ceiling for big phones and tablets. */
+    --fs: clamp(17px, 4.4vw, 21px);
+    --fs-h: clamp(25px, 6.6vw, 34px);
+    --fs-code: clamp(28px, 8vw, 40px);
+    --gap: clamp(12px, 2.4vh, 24px);
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:var(--fs)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width:34rem; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+         padding:max(calc(var(--gap) * 1.2), env(safe-area-inset-top)) 18px max(var(--gap), env(safe-area-inset-bottom)); }
+  .org { font-size:.85em; font-weight:600; color:var(--muted); }
+  .logo { display:block; width:clamp(160px, 52vw, 220px); height:auto; margin:0 auto .6em; }
+  h1, .step { text-align:center; }
+  .closeNote { text-align:center; margin-top:1.6em; }
+  .still p { margin:0 0 .6em; } .still p:last-child { margin-bottom:0; }
+  .helpLink { margin-top:1em; }
+  .step { font-size:.85em; color:var(--muted); margin-top:.2em; }
+  h1 { font-size:var(--fs-h); line-height:1.2; margin:.15em 0 var(--gap); }
+  p { margin:0 0 var(--gap); }
+  .screen { display:flex; flex-direction:column; flex:1; }
+  .grow { flex:1; min-height:var(--gap); }
+
+  label { display:block; font-weight:600; margin:0 0 .35em; }
+  .field { margin-bottom:var(--gap); }
+  .hint { font-size:.85em; color:var(--muted); font-weight:400; }
+  .field > .hint { margin-top:.3em; }
+  input[type=text], input[type=email], input[type=tel], input[type=password] {
+    width:100%; font:inherit; font-size:max(18px, 1em); padding:.7em .8em; border:1px solid var(--line); border-radius:14px;
+    background:#fff; color:var(--ink); appearance:none; }
+  input:focus { outline:3px solid rgba(29,95,168,.35); border-color:var(--link); }
+  input[aria-invalid="true"] { border-color:var(--error); }
+  .code input { font-size:var(--fs-code); letter-spacing:.35em; text-align:center; padding:.45em .5em;
+                font-variant-numeric:tabular-nums; }
+  .err { color:var(--error); font-size:.9em; margin-top:.4em; }
+  .err:empty { display:none; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .readonly { padding:.7em .8em; border-radius:14px; background:#eef1f5; word-break:break-all; }
+  .note { background:#e8f3ea; border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); font-size:.95em; }
+  .group-note { font-size:.85em; color:var(--muted); margin:0 0 var(--gap); }
+  .textlink { display:block; margin:var(--gap) auto 0; background:none; border:0; padding:.2em; min-height:0; width:auto;
+              color:var(--link); font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; }
+  .inline-link { color:var(--link); font-weight:600; text-decoration:underline; background:none; border:0; padding:0;
+                 font:inherit; cursor:pointer; min-height:0; width:auto; }
+  .privacy { font-size:.8em; color:var(--muted); text-align:center; margin-top:calc(var(--gap) * .8); }
+
+  /* Buttons: pairs side by side; Cancel black, Next/Send/Verify/Save green, Back outlined */
+  .buttons { display:flex; flex-direction:column; gap:12px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .pair.single { grid-template-columns:1fr; }
+  button { font:inherit; font-size:1.05em; font-weight:600; min-height:clamp(52px, 7vh, 64px); border:0; border-radius:16px;
+           width:100%; cursor:pointer; padding:.5em .8em; }
+  button:focus-visible { outline:3px solid rgba(29,95,168,.5); outline-offset:2px; }
+  button:disabled { opacity:.6; cursor:default; }
+  .go { background:var(--go); color:#fff; }   .go:active { background:var(--go-press); }
+  .stop { background:var(--stop); color:#fff; }
+  .back { background:#fff; color:var(--ink); border:2px solid var(--line); }
+
+  /* Yes / No questions */
+  .question { margin:0 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .question.missing { border-color:var(--error); border-width:2px; }
+  .question .q { font-weight:600; margin-bottom:.35em; }
+  .question .now, .question .qnote { font-size:.9em; color:var(--muted); margin-bottom:.6em; }
+  .question .entry { font-size:.9em; background:#f5f7fa; border-radius:10px; padding:.6em .7em; margin-bottom:.7em; }
+  .choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .choice button { background:#fff; color:var(--ink); border:2px solid var(--line); font-size:.95em; }
+  .choice button[aria-pressed="true"].yes { background:var(--go); border-color:var(--go); color:#fff; }
+  .choice button[aria-pressed="true"].no  { background:var(--stop); border-color:var(--stop); color:#fff; }
+
+  .consent { margin:-.4em 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .consent .q { font-weight:600; margin:.2em 0 .45em; }
+  .consent .sub + .sub { margin-top:.9em; }
+  .terms { margin:0 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .terms .q { font-weight:600; margin-bottom:.35em; }
+  .terms .text { font-size:.95em; margin-bottom:.8em; }
+  .agree { display:flex; gap:.7em; align-items:flex-start; font-weight:600; cursor:pointer; }
+  .agree input { width:1.6em; height:1.6em; flex:0 0 auto; margin:.05em 0 0; accent-color:var(--go); }
+  .agree.missing { color:var(--error); }
+  .agree + .agree { margin-top:.85em; }
+  .agree .sub { display:block; font-weight:400; font-size:.9em; color:var(--muted); margin-top:.15em; }
+  .agree.off { opacity:.45; cursor:default; }
+  .terms .now { font-size:.9em; color:var(--muted); margin-bottom:.7em; }
+  .entry-box { margin:0 0 var(--gap); }
+  .entry-box .entry { background:#fff; border:1px solid var(--line); border-radius:12px; padding:.6em .8em; margin-top:.3em; white-space:pre-line; }
+  .declined { background:#fdecea; color:var(--error); font-weight:600; border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); }
+  .preview-bar { position:sticky; top:0; z-index:9; background:#7a1f1f; color:#fff; text-align:center; font-weight:700;
+                 padding:.55em .7em; border-radius:10px; margin-bottom:.8em; }
+  .question button:disabled { opacity:.45; }
+  .summary { background:#fff; border-radius:16px; padding:.8em .95em; margin:0 0 var(--gap); }
+  .summary .item { padding:.25em 0; }
+  .summary .k { font-size:.8em; color:var(--muted); }
+  .summary .v { white-space:pre-line; }
+  .warn-box { background:#fdecea; color:var(--error); border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); }
+  .star { color:var(--error); font-weight:700; }
+  .footnote { font-size:.9em; }
+  .suggest, .still { margin-top:.7em; padding:.8em .9em; border-radius:12px; background:#fff7e0; border:1px solid #f0d58a; }
+  .suggest .pair { margin-top:.6em; }
+  .suggest button { min-height:2.6em; font-size:.95em; }
+  .msg { color:var(--error); font-weight:600; margin:0 0 var(--gap); }
+  .msg:empty { display:none; }
+  footer { text-align:center; font-size:.7em; color:#9aa5b1; margin-top:var(--gap); }
+  [hidden] { display:none !important; }
+
+  /* The directory viewer: the whole window, rows and columns fitted to it.
+     Type grows with the window: 16px on phones and small laptops, up to 22px on a large monitor. */
+  body.viewing main { display:none; }
+  #viewer { display:none; }
+  body.viewing #viewer { display:flex; }
+  /* w25: fixed to the window (rows fitted to the height), so the page buttons never move */
+  #viewer { flex-direction:column; height:100vh; height:100dvh; overflow:auto; box-sizing:border-box; max-width:2000px; margin:0 auto;
+            padding:max(8px, env(safe-area-inset-top)) clamp(10px, 2.5vw, 48px) 0;
+            font-size:clamp(16px, calc(1.2vw + 2px), 22px); }
+  .vhead { display:flex; align-items:center; gap:6px 1.2em; flex-wrap:wrap; margin-bottom:.25em; }
+  .vtitlerow { display:flex; align-items:baseline; gap:.8em; flex-wrap:wrap; }
+  .vhead .vdl { font-size:.85em; min-height:0; width:auto; padding:0; border-radius:0; white-space:nowrap; }
+  .vtitle { font-size:1.4em; font-weight:700; line-height:1.15; }
+  .vsub { font-size:.8em; color:var(--muted); }
+  .vhead button { font-size:.92em; min-height:2.75em; width:auto; padding:.3em 1em; border-radius:12px; }
+  .vsearch { flex:1 1 16em; max-width:32em; display:flex; align-items:center; gap:.4em; background:#fff; border:1px solid var(--line);
+             border-radius:12px; padding:0 .3em 0 .7em; min-height:2.75em; box-sizing:border-box; }
+  .vsearch:focus-within { border-color:var(--link); box-shadow:0 0 0 3px rgba(29,95,168,.15); }
+  .vsearch svg { flex:0 0 auto; width:1.1em; height:1.1em; }
+  .vsearch input { flex:1; min-width:0; border:0; outline:0; background:transparent; font:inherit; font-size:1em; color:var(--ink); padding:.4em 0; }
+  .vsearch input::-webkit-search-cancel-button { display:none; }
+  .vhead .vsearch button { font-size:1.2em; min-height:0; width:2em; height:2em; padding:0; border-radius:50%; background:transparent;
+                           color:var(--muted); line-height:1; }
+  .vhead .vsearch button:hover { background:#eef1f5; }
+  .vright { display:flex; align-items:center; gap:.6em 1em; margin-left:auto; }
+  .vbar { display:flex; justify-content:space-between; gap:10px; font-size:.8em; color:var(--muted); margin:0 0 .3em; }
+  .vbar #vCount.found { color:var(--ink); font-weight:600; }
+  .vmsg { font-size:.88em; background:#e8f3ea; border-radius:10px; padding:.45em .7em; margin-bottom:.4em; }
+  .vmsg.bad { background:#fdecea; color:var(--error); }
+  #grid { flex:1; min-height:0; display:grid; grid-auto-flow:column; touch-action:pan-y; }
+  .ent { background:#fff; border:1px solid var(--line); padding:.4em .65em; min-width:0; overflow:hidden; line-height:1.3; }
+  .ent .n { font-weight:600; font-size:1em; }
+  .ent a { text-decoration:none; }
+  .ent .m { display:block; color:var(--link); font-size:.86em; overflow-wrap:anywhere; }
+  .ent .a { font-size:.86em; }
+  .ent .p { color:var(--error); font-weight:600; font-size:.86em; }
+  .none { grid-column:1 / -1; align-self:start; padding:1em; color:var(--muted); }
+  /* Home at the left end; Previous, page and Next centered (w25) */
+  .pager { border-top:1px solid var(--line); padding:.45em 0 max(8px, env(safe-area-inset-bottom)); margin-top:.4em;
+           display:grid; grid-template-columns:1fr minmax(0, 11em) auto minmax(0, 11em) 1fr; gap:.9em; align-items:center; }
+  .pager button { font-size:1em; min-height:2.75em; white-space:nowrap; }
+  .pager #vHome { grid-column:1; justify-self:start; width:auto; padding:0 1.3em; }
+  .pager #prevBtn { grid-column:2; } .pager #pageNo { grid-column:3; } .pager #nextBtn { grid-column:4; }
+  .pager .pn { font-weight:600; text-align:center; min-width:6em; font-size:.94em; }
+  @media (max-width: 699px) {
+    .pager { grid-template-columns:auto minmax(0, 1fr) auto minmax(0, 1fr); gap:.5em; }
+    .pager #vHome { padding:0 .8em; }
+    .pager #prevBtn, .pager #nextBtn { padding:0 .4em; }
+    .pager #pageNo { min-width:0; padding:0 .2em; }
+    .ent .n { font-size:15px; } .ent .m, .ent .a, .ent .p { font-size:13px; }
+    .vhead { gap:8px; }
+    .vsearch { order:3; flex-basis:100%; max-width:none; }   /* its own line under the title on a phone */
+  }
+
+  .homebtn { min-height:76px; font-size:1.15em; }
+  .homebtn .sub { display:block; font-weight:400; font-size:.8em; opacity:.9; }
+
+  /* Tablets and computers: keep the buttons just under the form instead of at the bottom of a tall screen */
+  @media (min-width: 700px) { .grow { flex:0 0 var(--gap); } main { padding-top:6vh; } }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/logo.png" alt="Quakers, Midlothian Friends Meeting" onload="document.querySelector('.org').hidden = true" onerror="this.remove()">
+  <div class="org">Midlothian Friends Meeting</div>
+  <div class="preview-bar" id="previewBar" hidden></div>
+
+  <!-- Admin preview (/update/?preview): see a member's pages; nothing is saved -->
+  <section class="screen" id="s-admin" hidden>
+    <h1>Preview Friendly Contacts</h1>
+    <p>See exactly what a member sees. Nothing is saved and no email is sent.</p>
+    <div class="field">
+      <label for="adminPw">Admin password</label>
+      <input id="adminPw" type="password" autocomplete="current-password" maxlength="64">
+    </div>
+    <div class="field">
+      <label for="adminEmail">Member's email address</label>
+      <input id="adminEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="name@example.com">
+      <div class="err" id="adminErr" role="alert"></div>
+    </div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="stop" id="adminCancel" type="button">Cancel</button><button class="go" id="adminGo" type="button">Preview</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="s-previewdone" hidden>
+    <h1>Preview closed</h1>
+    <p>Nothing was saved and no email was sent.</p>
+    <button class="textlink" id="previewAgain" type="button">Preview another member</button>
+  </section>
+
+  <!-- Ask for a code -->
+  <section class="screen" id="s-start" hidden>
+    <h1 id="startTitle">Welcome to Friendly Contacts</h1>
+    <p id="startText">To add or manage your contact information with Midlothian Friends Meeting, enter your email address and tap <strong>Send email</strong>. Then open the message from <span class="fromAddr">records@midlothianfriends.org</span> to verify your email address.</p>
+    <div class="field">
+      <label for="email">Email address</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="name@example.com">
+      <div class="err" id="startErr" role="alert"></div>
+      <div class="suggest" id="suggest" hidden role="alert">
+        Did you mean <strong id="suggestAddr"></strong>?
+        <div class="pair"><button class="back" id="suggestNo" type="button">No, it's right</button><button class="go" id="suggestYes" type="button">Yes, use that</button></div>
+      </div>
+    </div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="stop" data-cancel type="button">Cancel</button><button class="go" id="sendBtn" type="button">Send email</button></div>
+    </div>
+  </section>
+
+  <!-- Link sent: check your email -->
+  <section class="screen" id="s-link" hidden>
+    <h1>Check your email</h1>
+    <div class="note" id="linkNote"></div>
+    <p>Follow the instructions in the email.</p>
+    <div class="err" id="linkErr" role="alert"></div>
+    <button class="textlink helpLink" data-help type="button" aria-expanded="false">Still no email after ten minutes?</button>
+    <div class="still" data-still hidden></div>
+    <p class="closeNote">You can close this page.</p>
+  </section>
+
+
+  <!-- Enter the code -->
+  <section class="screen" id="s-code" hidden>
+    <h1>Enter the security code from your email</h1>
+    <div class="note" id="codeNote"></div>
+    <div class="field code">
+      <label for="code" id="codeLabel">Security code</label>
+      <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="······">
+      <div class="err" id="codeErr" role="alert"></div>
+    </div>
+    <div class="buttons">
+      <div class="pair single"><button class="go" id="verifyBtn" type="button">Verify</button></div>
+    </div>
+    <button class="textlink helpLink" data-help type="button" aria-expanded="false">Still no email after ten minutes?</button>
+    <div class="still" data-still hidden></div>
+    <div class="grow"></div>
+    <div class="privacy">Only type this code on this page. We will never ask for it by phone.</div>
+  </section>
+
+  <!-- Step 1: Your information -->
+  <section class="screen" id="s-info" hidden>
+    <div class="step" data-step="1"></div>
+    <h1 id="infoTitle">Your information</h1>
+    <div class="note" id="welcomeBack" hidden>Welcome back! Saving will put you back on the roster.</div>
+    <div class="note" id="pendingNote" hidden>Your request to be listed in the directory is pending. We’ll email you when the process is complete.</div>
+    <div class="field">
+      <label>Email address</label>
+      <div class="readonly" id="infoEmail"></div>
+      <div class="hint">To update your email address, please write to <a class="recordsLink" href="mailto:records@midlothianfriends.org">records@midlothianfriends.org</a>.</div>
+    </div>
+    <div class="field"><label for="first">First name</label>
+      <input id="first" type="text" autocomplete="given-name" maxlength="80"><div class="err" id="err-first"></div></div>
+    <div class="field"><label for="last">Last name</label>
+      <input id="last" type="text" autocomplete="family-name" maxlength="80"><div class="err" id="err-last"></div></div>
+    <div class="field"><label for="phone">Phone <span class="hint">(optional)</span></label>
+      <input id="phone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20"><div class="err" id="err-phone"></div>
+      <div class="hint">A cell phone is best if you have one.</div></div>
+    <div class="field"><label for="address1">Street address <span class="hint">(optional)</span></label>
+      <input id="address1" type="text" autocomplete="address-line1" maxlength="120"></div>
+    <div class="field"><label for="address2">Apartment, suite, etc. <span class="hint">(optional)</span></label>
+      <input id="address2" type="text" autocomplete="address-line2" maxlength="120"></div>
+    <div class="field"><label for="city">City</label>
+      <input id="city" type="text" autocomplete="address-level2" maxlength="80"></div>
+    <div class="row2">
+      <div class="field"><label for="state">State</label>
+        <input id="state" type="text" autocomplete="address-level1" autocapitalize="characters" maxlength="2"><div class="err" id="err-state"></div></div>
+      <div class="field"><label for="zip">ZIP</label>
+        <input id="zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="5"><div class="err" id="err-zip"></div></div>
+    </div>
+    <div class="group-note">You choose later what appears in the directory.</div>
+    <div class="msg" id="infoMsg" role="alert"></div>
+    <div class="buttons">
+      <div class="pair single"><button class="go" id="infoNext" type="button">Next →</button></div>
+      <button class="stop" data-cancel type="button">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Step 2: Your choices -->
+  <section class="screen" id="s-choices" hidden>
+    <div class="step" data-step="2"></div>
+    <h1>Our news</h1>
+    <div id="choiceList"></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="back" data-back type="button">← Back</button><button class="go" id="choicesNext" type="button">Next →</button></div>
+      <button class="stop" data-cancel type="button">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Directory (only when News is Yes) -->
+  <section class="screen" id="s-dir" hidden>
+    <div class="step" data-step="3"></div>
+    <h1 id="dirTitle">The member directory</h1>
+    <div id="dirList"></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="back" data-back type="button">← Back</button><button class="go" id="dirNext" type="button">Next →</button></div>
+      <button class="stop" data-cancel type="button">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Step 3: Review -->
+  <section class="screen" id="s-review" hidden>
+    <div class="step" data-step="last"></div>
+    <h1>Please check your information</h1>
+    <p>This is exactly what will be saved. Tap <strong>Save</strong> if it's right, or <strong>← Back</strong> to change something.</p>
+    <div class="summary" id="reviewSummary"></div>
+    <p class="footnote" id="reviewNote" hidden></p>
+    <div class="msg" id="reviewMsg" role="alert"></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="back" data-back type="button">← Back</button><button class="go" id="saveBtn" type="button">Save</button></div>
+      <button class="stop" data-cancel type="button">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Saved -->
+  <section class="screen" id="s-done" hidden>
+    <h1 id="doneTitle">Saved. Thank you!</h1>
+    <p id="doneLead"></p>
+    <div class="summary" id="doneSummary"></div>
+    <p class="footnote" id="doneNote" hidden></p>
+    <p class="footnote" id="doneFootnote" hidden><span class="star">*</span> Your request to be listed in the directory is pending. Requests are normally processed weekly.</p>
+    <div class="warn-box" id="doneProblem" hidden></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <button class="go" data-home id="doneHome" type="button" hidden>Home</button>
+      <button class="go" data-close id="doneClose" type="button">Close Friendly Contacts</button>
+    </div>
+  </section>
+
+  <!-- Canceled -->
+  <section class="screen" id="s-canceled" hidden>
+    <h1>Canceled at your request</h1>
+    <p>Nothing was changed.</p>
+    <p id="cancelMore"></p>
+    <div class="grow"></div>
+    <div class="buttons"><button class="go" data-close type="button">Close Friendly Contacts</button></div>
+  </section>
+
+  <!-- Home: members with directory access (w25) -->
+  <section class="screen" id="s-home" hidden>
+    <h1 id="homeTitle">Welcome</h1>
+    <p>What would you like to do?</p>
+    <div class="buttons">
+      <button class="go homebtn" id="homeInfo" type="button">My information<span class="sub">Contact details and choices</span></button>
+      <button class="go homebtn" id="homeDir" type="button">Directory<span class="sub">View or download the Meeting directory</span></button>
+    </div>
+    <div class="msg" id="homeMsg" role="alert" style="margin-top:var(--gap)"></div>
+    <div class="grow"></div>
+    <div class="buttons"><button class="stop" data-close type="button">Close Friendly Contacts</button></div>
+  </section>
+
+  <!-- Terms of use, every time the directory opens (w25) -->
+  <section class="screen" id="s-terms" hidden>
+    <h1>Before you open the directory</h1>
+    <div class="terms">
+      <div class="q" id="termsTitle"></div>
+      <div class="text" id="termsText"></div>
+      <label class="agree" id="agreeRow"><input type="checkbox" id="agree"><span>I agree to the directory terms of use</span></label>
+    </div>
+    <div class="msg" id="termsMsg" role="alert"></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="back" data-home type="button">Home</button><button class="go" id="openBtn" type="button">Open directory</button></div>
+    </div>
+  </section>
+
+  <!-- Other errors -->
+  <!-- The link was used in another window -->
+  <section class="screen" id="s-expired" hidden>
+    <h1 id="expTitle">This sign-in link has expired</h1>
+    <p id="expText"></p>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair single"><button class="go" id="expStart" type="button">Start over</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="s-elsewhere" hidden>
+    <h1>You're signed in</h1>
+    <p>You opened the link in your email, so you're signed in there. You can close this page.</p>
+  </section>
+
+  <section class="screen" id="s-wait" hidden><p id="waitMsg">One moment…</p></section>
+
+  <footer id="ver"></footer>
+</main>
+
+<!-- The directory viewer (w25, from the old /directory/ page) -->
+<div id="viewer" aria-label="Meeting directory">
+  <div class="vhead">
+    <div>
+      <div class="vtitlerow"><div class="vtitle">Meeting Directory</div><button class="inline-link vdl" id="pdfBtn" type="button">Download PDF</button></div>
+      <div class="vsub" id="vStamp"></div>
+    </div>
+    <label class="vsearch" for="q">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="#5f6b78" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="q" type="search" placeholder="Search names or emails" aria-label="Search the directory" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <button id="qClear" type="button" aria-label="Clear the search" hidden>×</button>
+    </label>
+  </div>
+  <div class="vmsg" id="vMsg" hidden></div>
+  <div class="vbar"><span id="vRange"></span><span id="vCount"></span></div>
+  <div id="grid" role="list"></div>
+  <div class="pager">
+    <button class="back" id="vHome" data-home type="button">Home</button>
+    <button class="back" id="prevBtn" type="button">← Previous</button>
+    <div class="pn" id="pageNo" aria-live="polite"></div>
+    <button class="go" id="nextBtn" type="button">Next →</button>
+  </div>
+  <a id="saveLink" href="#" hidden></a>
+</div>
+
+<script>
+  // ---- configuration --------------------------------------------------------------------
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1jd5kCQYgxXpQeNiJMASztq5An4xw1F7063KQIa9R7Izw_3Bj3MAyZYgUPH8VVu_BlQ/exec';
+  var PAGE_VERSION = '2026-11-20w25';
+  var APP_NAME = 'Friendly Contacts';   // shown as the heading of the first card and in the browser tab
+  // -----------------------------------------------------------------------------------------
+
+  var token = null;      // 30-minute session from Verify; kept only in this page's memory
+  var loaded = null;     // from 'load': email, isNew, archived, record, updated, choices[]
+  var cleaned = null;    // from 'preview': the record exactly as it will be saved
+  var answers = {};      // choice key -> true / false / null
+  var consent = { phone: true, address: false };   // directory consent: what to show
+  var agreed = false;    // directory terms of use: agreed now or before
+  var codeRef = '';      // private reference for the latest code request; lets Cancel void that code
+  var linkKey = '';      // the one-time key from a sign-in link (after "#k="), used once as the page opens
+  var fallback = false;  // a link didn't work: this visit uses a code instead
+  // Sign-in method: while testing, /update/ asks for a link and /update/?code for a code. The script's
+  // SIGNIN_METHOD setting has the last word (see 'config' below).
+  var mode = /(^|[?&])code(=|&|$)/i.test(location.search) ? 'code' : 'link';
+  var modeFixed = false;
+  var fromAddr = '';     // the address our emails come from (FROM_EMAIL), for "what to expect" 
+  var finished = false;  // after Save or Cancel, the back gesture doesn't reopen the form
+  var FIELDS = ['first', 'last', 'phone', 'address1', 'address2', 'city', 'state', 'zip'];
+  var SCREENS = ['s-admin', 's-start', 's-code', 's-link', 's-home', 's-terms', 's-info', 's-choices', 's-dir', 's-review'];
+  // w25: where Close Friendly Contacts goes (the script's WEBSITE_HOME_URL, from 'config').
+  var HOME_URL = 'https://midlothianfriends.org';
+  var stale = false;     // after Save: My information reloads from the server
+  // The directory viewer
+  var blobUrl = '';
+  var rows = [];         // the directory: [last, first, email, phone, line1, line2]
+  var view = [];         // what's shown: all of rows, or the search matches
+  var keys = [];         // per row: the words of its names and email, lower case, accents removed (for search)
+  var query = '';        // the current search, as typed
+  var browseFirst = 0;   // where the full directory was when a search began
+  var first = 0;         // index of the first entry on the current page
+  var perPage = 30, cols = 3, nRows = 10, rowHeight = 100;
+  // /update/?preview: the admin sees a member's pages; nothing is saved and no email is sent.
+  var previewMode = /(^|[?&])preview(=|&|$)/i.test(location.search);
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(id) {
+    if (id !== 's-link' && id !== 's-code' && typeof stopWaiting === 'function') stopWaiting();
+    document.querySelectorAll('.screen').forEach(function (s) { s.hidden = s.id !== id; });
+    window.scrollTo(0, 0);
+  }
+
+  // Screens are history entries, so the phone's back gesture moves to the previous one.
+  function go(id) { history.pushState({ screen: id }, ''); show(id); }
+  window.addEventListener('popstate', function (e) {
+    if (finished) { history.pushState({ screen: 'end' }, ''); return; }
+    var id = e.state && e.state.screen;
+    if (document.body.classList.contains('viewing') && id !== 'viewer') leaveViewer();   // back from the directory
+    if (stale && ['s-info', 's-choices', 's-dir', 's-review'].indexOf(id) !== -1) {   // the form was saved: Home instead
+      history.replaceState({ screen: 's-home' }, ''); show('s-home'); return;
+    }
+    if (SCREENS.indexOf(id) !== -1) show(id);
+  });
+
+  /** POST to Apps Script. text/plain keeps the request "simple", so no cross-site preflight is needed. */
+  function api(action, data) {
+    var body = JSON.stringify(Object.assign({ action: action }, data || {}));
+    return fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { throw new Error('We couldn\'t reach the server. Please check your connection and try again.'); })
+      .then(function (j) {
+        // One number when page and script match; both when they differ (a stale page or an undeployed script).
+        if (j.version) $('ver').textContent = 'Version ' + PAGE_VERSION + (j.version === PAGE_VERSION ? '' : ' / script ' + j.version);
+        if (!j.ok) {
+          var e = new Error(j.error || 'Something went wrong.');
+          e.sessionProblem = j.sessionProblem; e.codeProblem = j.codeProblem; e.email = j.email || '';
+          throw e;
+        }
+        return j;
+      });
+  }
+
+  function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = label; }
+
+  // ---- ask for a code ---------------------------------------------------------------------------
+  function emailOk() {
+    var v = $('email').value.trim();
+    $('startErr').textContent = '';
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { $('email').removeAttribute('aria-invalid'); return v; }
+    $('startErr').textContent = 'Please enter your email address.';
+    $('email').setAttribute('aria-invalid', 'true');
+    $('email').focus();
+    return '';
+  }
+
+  // ---- typo check for the email address ----------------------------------------------------------
+  var KNOWN_DOMAINS = ['gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com', 'aol.com',
+    'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'icloud.com', 'me.com', 'mac.com', 'comcast.net',
+    'verizon.net', 'att.net', 'sbcglobal.net', 'bellsouth.net', 'cox.net', 'charter.net', 'earthlink.net',
+    'protonmail.com', 'proton.me', 'mail.com', 'gmx.com', 'zoho.com', 'vcu.edu', 'midlothianfriends.org'];
+  var TLD_FIX = { con: 'com', cmo: 'com', ocm: 'com', cm: 'com', om: 'com', comm: 'com', vom: 'com', xom: 'com',
+    nte: 'net', ner: 'net', nett: 'net', ogr: 'org', orh: 'org', rog: 'org' };
+  var okAddress = '';   // an address the member said is right despite a suggestion
+
+  /** Edit distance allowing one swap of neighbours ("gmial" -> "gmail" counts as 1). */
+  function editDistance(a, b) {
+    var d = [], i, j;
+    for (i = 0; i <= a.length; i++) { d[i] = [i]; }
+    for (j = 0; j <= b.length; j++) { d[0][j] = j; }
+    for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
+      var c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[a.length][b.length];
+  }
+
+  /** A likely correction for a mistyped address, or '' if it looks fine. */
+  function suggestFor(email) {
+    var at = email.lastIndexOf('@');
+    if (at < 1) return '';
+    var user = email.slice(0, at), dom = email.slice(at + 1).toLowerCase();
+    if (KNOWN_DOMAINS.indexOf(dom) !== -1) return '';
+    var best = '', bestD = 3;
+    KNOWN_DOMAINS.forEach(function (k) {
+      var dist = editDistance(dom, k);
+      if (dist < bestD && (dist === 1 || k.length >= 9)) { best = k; bestD = dist; }
+    });
+    if (!best) {
+      var parts = dom.split('.'), tld = parts.pop();
+      if (TLD_FIX[tld] && parts.length) best = parts.join('.') + '.' + TLD_FIX[tld];
+      else if (/^(gmail|yahoo|hotmail|outlook|aol|icloud)(com|net)$/.test(dom)) best = dom.replace(/(com|net)$/, '.$1');
+    }
+    return best && best !== dom ? user + '@' + best : '';
+  }
+
+  /** from: 'start', 'code' (Send a new code) or 'link' (Send a new link). */
+  function sendCode(from) {
+    var email = $('email').value.trim();
+    if (from === 'start' && !(email = emailOk())) return;
+    if (from === 'start' && email !== okAddress) {
+      var better = suggestFor(email);
+      if (better) {
+        $('suggestAddr').textContent = better;
+        $('suggest').hidden = false;
+        $('suggestYes').focus();
+        return;
+      }
+    }
+    $('suggest').hidden = true;
+    var btn = $('sendBtn'), errBox = $('startErr');
+    var label = btn.textContent;
+    busy(btn, true, 'Sending…');
+    errBox.textContent = '';
+    codeRef = newRef();
+    api('sendCode', { email: email, ref: codeRef, method: mode, fallback: fallback }).then(function (d) {
+      if (d.method && d.method !== mode) { mode = d.method; applyMode(); }
+      if (d.method === 'link') openLinkScreen(email);
+      else openCodeScreen(email, true);
+    }).catch(function (e) {
+      errBox.textContent = e.message;
+    }).then(function () { busy(btn, false, label); });
+  }
+
+  // ---- Waiting for the email: the green note, the "Still no email?" help, and the link used elsewhere --
+  var pollTimer = null, pollUntil = 0;
+
+  /** Start over: back to the first card with the address still filled in (a new email replaces the old). */
+  function startOver() { history.back(); }
+
+  function startOverLink() {
+    var a = document.createElement('button');
+    a.type = 'button'; a.className = 'inline-link'; a.textContent = 'Start over';
+    a.onclick = startOver;
+    return a;
+  }
+
+  /** "We sent an email to … If the email address is incorrect, tap Start over." (both methods) */
+  function fillSentNote(note, email) {
+    note.textContent = '';
+    note.appendChild(document.createTextNode('We sent an email to '));
+    add(note, 'strong', '', email);
+    note.appendChild(document.createTextNode('. If the email address is incorrect, tap '));
+    note.appendChild(startOverLink());
+    note.appendChild(document.createTextNode('.'));
+  }
+
+  /** The help behind "Still no email after ten minutes?" (closed until tapped). */
+  function fillHelp(screen, email) {
+    var box = screen.querySelector('[data-still]'), link = screen.querySelector('[data-help]');
+    box.textContent = '';
+    var p1 = add(box, 'p', '', 'Check that this is your address: ');
+    add(p1, 'strong', '', email);
+    p1.appendChild(document.createTextNode('. If it\'s wrong, tap '));
+    p1.appendChild(startOverLink());
+    p1.appendChild(document.createTextNode('.'));
+    add(box, 'p', '', 'Check your spam or junk folder. If you find the email there, move it to your Inbox, ' +
+      'open it there and follow the instructions in the email.');
+    var p3 = add(box, 'p', '', 'If you can\'t find it, tap ');
+    p3.appendChild(startOverLink());
+    p3.appendChild(document.createTextNode('.'));
+    box.hidden = true;
+    link.setAttribute('aria-expanded', 'false');
+  }
+
+  function startWaiting(screenId, email) {
+    stopWaiting();
+    fillHelp($(screenId), email);
+    if (screenId === 's-link') {
+      pollUntil = Date.now() + (30 + 2) * 60 * 1000;
+      pollTimer = setInterval(checkLinkUsed, 15 * 1000);
+    }
+  }
+
+  function stopWaiting() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  /** While waiting on "Check your email": was the link opened somewhere else? */
+  function checkLinkUsed() {
+    if ($('s-link').hidden || !codeRef || document.visibilityState === 'hidden') return;
+    if (Date.now() > pollUntil) { clearInterval(pollTimer); return; }
+    api('linkStatus', { email: $('email').value.trim(), ref: codeRef }).then(function (d) {
+      if (!d.used || $('s-link').hidden) return;
+      stopWaiting();
+      finished = true; codeRef = '';
+      history.pushState({ screen: 'end' }, '');
+      show('s-elsewhere');
+    }).catch(function () { /* try again at the next check */ });
+  }
+
+  function openLinkScreen(email) {
+    fillSentNote($('linkNote'), email);
+    $('linkErr').textContent = '';
+    if ($('s-link').hidden) go('s-link');
+    startWaiting('s-link', email);
+  }
+
+  /** The first card reads the same for both methods; only the sender's address comes from the script. */
+  function applyMode() {
+    document.querySelectorAll('.fromAddr').forEach(function (el) { el.textContent = fromAddr || 'records@midlothianfriends.org'; });
+  }
+
+  /**
+   * Opened from a sign-in link: sign in straight away and go to step 1. If the link was already used
+   * (often by an email security scanner opening it first) or has expired, offer a code instead.
+   */
+  function signInFromLink() {
+    $('waitMsg').textContent = 'Signing you in…';
+    show('s-wait');
+    api('verify', { key: linkKey }).then(function (d) {
+      token = d.token;
+      linkKey = '';
+      load();
+    }).catch(function (e) {
+      linkKey = '';
+      if (!e.codeProblem) { failed(e); return; }
+      // The mail service keeps using links up before the person can: a code can't be used up that way.
+      if (e.codeProblem === 'scanner') { showCodeInstead(e.email, e.message); return; }
+      showExpired(e.codeProblem, e.message);
+    });
+  }
+
+  /**
+   * A link that no longer works: expired, replaced by a newer email, or already used. Say so and send
+   * nothing; Start over goes back to the email screen for a new link.
+   */
+  function showExpired(problem, message) {
+    var replaced = problem === 'replaced';
+    $('expTitle').textContent = replaced ? 'Please use your newer email'
+      : problem === 'used' ? 'This sign-in link has already been used' : 'This sign-in link has expired';
+    $('expText').textContent = message;
+    var b = $('expStart');
+    b.textContent = 'Start over';
+    b.className = replaced ? 'back' : 'go';   // with a newer email waiting, Start over is the second choice
+    history.replaceState({ screen: 's-expired' }, '');
+    show('s-expired');
+  }
+
+  /** Links keep being used up before the person can tap them: switch this visit to a security code. */
+  function showCodeInstead(email, message) {
+    fallback = true;
+    mode = 'code';
+    restart('');
+    $('startTitle').textContent = 'Let\u2019s use a security code instead';
+    $('startText').textContent = message;
+    if (email) $('email').value = email;
+    $('sendBtn').textContent = 'Send code';
+  }
+
+
+  function newRef() {
+    var a = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+
+  function openCodeScreen(email, justSent) {
+    fillSentNote($('codeNote'), email);
+    $('code').value = '';
+    verifying = false;
+    busy($('verifyBtn'), false, 'Verify');
+    $('codeErr').textContent = '';
+    $('code').removeAttribute('aria-invalid');
+    if ($('s-code').hidden) go('s-code');
+    startWaiting('s-code', email);
+    setTimeout(function () { $('code').focus(); }, 50);
+  }
+
+  // ---- verify ---------------------------------------------------------------------------------------
+  var verifying = false;
+  function verify() {
+    var code = $('code').value.replace(/\D/g, '');
+    if (verifying) return;
+    if (code.length !== 6) {
+      $('codeErr').textContent = 'Please enter all 6 digits.';
+      $('code').setAttribute('aria-invalid', 'true');
+      return;
+    }
+    verifying = true;
+    busy($('verifyBtn'), true, 'Checking…');
+    api('verify', { email: $('email').value.trim(), code: code }).then(function (d) {
+      token = d.token;
+      codeRef = '';
+      $('code').blur();
+      load();   // Verify stays disabled ("Checking…") so the spent code can't be sent again
+    }).catch(function (e) {
+      verifying = false;
+      busy($('verifyBtn'), false, 'Verify');
+      $('codeErr').textContent = e.message;
+      $('code').setAttribute('aria-invalid', 'true');
+      $('code').select();
+    });
+  }
+
+  // ---- load step 1 ----------------------------------------------------------------------------------
+  /**
+   * After sign-in (where = ''): members with directory access go to the home screen; everyone else to
+   * My information. where = 'info': My information from Home.
+   */
+  function load(where) {
+    if (where === 'info') { $('waitMsg').textContent = 'One moment…'; go('s-wait'); }
+    api('load', { token: token }).then(function (d) {
+      stale = false;
+      loaded = d;
+      $('infoEmail').textContent = d.email;
+      $('pendingNote').hidden = !(dirChoice() && dirChoice().status === 'pending');
+      $('infoTitle').textContent = d.isNew ? 'Join our roster' : 'Your information';
+      $('welcomeBack').hidden = !d.archived;
+      FIELDS.forEach(function (f) { $(f).value = d.record ? d.record[f] || '' : ''; clearErr(f); });
+      // Existing records start from their current status; new people must choose.
+      answers = {};
+      d.choices.forEach(function (c) {
+        answers[c.key] = c.key === 'directory' ? (!!c.current && !c.declined)   // a checkbox: always answered
+                       : d.isNew && !c.current ? null : !!c.current;
+      });
+      $('previewBar').hidden = !d.preview;
+      $('previewBar').textContent = d.preview ? 'PREVIEW of ' + d.email + ' \u00b7 nothing will be saved' : '';
+      $('saveBtn').textContent = d.preview ? 'Close preview' : 'Save';
+      consent = { phone: !!d.consent.phone, address: !!d.consent.address };
+      var dc = dirChoice();
+      agreed = !!(dc && dc.termsDate);
+      // Step numbers: the directory card is a step of its own when the directory is offered.
+      var n = dc ? 4 : 3;
+      document.querySelectorAll('[data-step]').forEach(function (el) {
+        var k = el.getAttribute('data-step');
+        el.textContent = 'Step ' + (k === 'last' ? n : k) + ' of ' + n;
+      });
+      $('infoMsg').textContent = '';
+      if (where === 'info') { history.replaceState({ screen: 's-info' }, ''); show('s-info'); return; }
+      if (d.access) {
+        $('homeTitle').textContent = 'Welcome, ' + ((d.record && d.record.first) || 'Friend');
+        $('homeMsg').textContent = '';
+        history.replaceState({ screen: 's-home' }, '');   // Home is the first screen; back leaves the page
+        show('s-home');
+        return;
+      }
+      history.replaceState({ screen: 's-info' }, '');   // back from step 1 returns to the email card, not the code
+      show('s-info');
+    }).catch(failed);
+  }
+
+  // ---- step 1 -> 2 ---------------------------------------------------------------------------------
+  function infoNext() {
+    var ok = true, first = null;
+    function bad(f, text) { setErr(f, text); ok = false; first = first || f; }
+    if (!$('first').value.trim()) bad('first', 'Please enter your first name.');
+    if (!$('last').value.trim()) bad('last', 'Please enter your last name.');
+    if (!checkPhone()) { ok = false; first = first || 'phone'; }
+    if (!checkZip()) { ok = false; first = first || 'zip'; }
+    var st = $('state').value.trim();
+    if (st && !/^[A-Za-z]{2}$/.test(st)) bad('state', 'Use the 2-letter abbreviation, like VA.');
+    if (!ok) { $(first).focus(); return; }
+
+    var rec = {};
+    FIELDS.forEach(function (f) { rec[f] = $(f).value; });
+    $('infoMsg').textContent = '';
+    busy($('infoNext'), true, 'Checking…');
+    api('preview', { token: token, record: rec }).then(function (d) {
+      cleaned = d.record;
+      FIELDS.forEach(function (f) { $(f).value = cleaned[f]; });   // show the tidied values if they go back
+      renderChoices();
+      go('s-choices');
+    }).catch(function (e) {
+      if (e.sessionProblem) return failed(e);
+      $('infoMsg').textContent = e.message;
+    }).then(function () { busy($('infoNext'), false, 'Next →'); });
+  }
+
+  // ---- step 2 ------------------------------------------------------------------------------------------
+  function dirChoice() { return loaded.choices.filter(function (c) { return c.key === 'directory'; })[0]; }
+  function choiceByKey(k) { return loaded.choices.filter(function (c) { return c.key === k; })[0]; }
+
+  function renderChoices() {
+    var list = $('choiceList');
+    list.textContent = '';
+    var shown = loaded.choices.filter(function (c) { return c.key !== 'directory'; });
+    if (!shown.length) {
+      add(list, 'p', '', 'There are no choices to make here right now. Tap Next to continue.');
+      return;
+    }
+    renderQuestions(list, shown);
+  }
+
+  /**
+   * The directory card: introduction, terms of use, then three checkboxes. "Include me" means accepting the
+   * terms; phone and address can be chosen only while it is checked. Someone carried forward from the
+   * April 2025 directory sees a note first; someone declined sees only "Your request was declined."
+   */
+  function renderDirectory() {
+    var c = dirChoice(), list = $('dirList');
+    list.textContent = '';
+    if (c.title) $('dirTitle').textContent = c.title;
+    if (c.carried) {
+      var n = add(list, 'div', 'note', '');
+      add(n, 'strong', '', 'You’re already in our directory.');
+      n.appendChild(document.createTextNode(' ' + c.carried));
+    }
+    c.preamble.forEach(function (t) { add(list, 'p', '', t); });
+    var tb = add(list, 'div', 'terms', '');
+    add(tb, 'div', 'q', c.termsTitle || 'Directory terms of use');
+    add(tb, 'div', 'text', c.terms);
+    if (c.declined) {
+      answers.directory = false;
+      add(list, 'div', 'declined', c.declined);
+      return;
+    }
+    var box = add(list, 'div', 'terms', '');
+    box.id = 'dirBox';
+    if (!c.carried && !loaded.isNew) add(box, 'div', 'now', c.now);
+    var inc = checkbox(box, c.question, c.termsDate ? 'You accepted the directory terms of use on ' + c.termsDate + '.'
+      : c.carried ? 'By keeping this checked, I accept the directory terms of use.'
+      : 'By checking this box, I accept the directory terms of use.', answers.directory === true);
+    if (c.reviewTime && c.status !== 'in') add(inc.label.querySelector('span'), 'span', 'sub', c.reviewTime);
+    var ph = checkbox(box, 'Show my phone number', !cleaned.phone && '(You haven\'t given a phone number.)', consent.phone);
+    var ad = checkbox(box, 'Show my postal address', !cleaned.address1 && '(You haven\'t given an address.)', consent.address);
+    var pv = add(list, 'div', 'entry-box', '');
+    add(pv, 'div', 'qnote', c.note || 'Members who use the directory will see:');
+    var entry = add(pv, 'div', 'entry', '');
+    function sync() {
+      answers.directory = inc.input.checked;
+      agreed = inc.input.checked || !!c.termsDate;
+      consent.phone = ph.input.checked;
+      consent.address = ad.input.checked;
+      [ph, ad].forEach(function (x) {
+        x.input.disabled = !inc.input.checked;
+        x.label.classList.toggle('off', !inc.input.checked);
+      });
+      pv.hidden = !inc.input.checked;
+      entry.textContent = directoryEntry();
+    }
+    [inc, ph, ad].forEach(function (x) { x.input.addEventListener('change', sync); });
+    sync();
+  }
+
+  /** A checkbox with a bold label and an optional line of small print. */
+  function checkbox(parent, text, sub, checked) {
+    var label = add(parent, 'label', 'agree', '');
+    var input = add(label, 'input', '', '');
+    input.type = 'checkbox';
+    input.checked = !!checked;
+    var span = add(label, 'span', '', text);
+    if (sub) add(span, 'span', 'sub', sub);
+    return { label: label, input: input };
+  }
+
+  function renderQuestions(list, shown) {
+    shown.forEach(function (c) {
+      var box = add(list, 'div', 'question', '');
+      box.id = 'q-' + c.key;
+      box.setAttribute('role', 'group');
+      add(box, 'div', 'q', c.question);
+      if (!loaded.isNew || c.current) add(box, 'div', 'now', c.now);
+      if (c.note) add(box, 'div', 'qnote', c.note);
+      var entry = c.showsEntry ? add(box, 'div', 'entry', '') : null;
+      var row = add(box, 'div', 'choice', '');
+      var yes = add(row, 'button', 'yes', c.yes), no = add(row, 'button', 'no', c.no);
+      var err = add(box, 'div', 'err', '');
+      yes.type = no.type = 'button';
+      function paint() {
+        yes.setAttribute('aria-pressed', answers[c.key] === true ? 'true' : 'false');
+        no.setAttribute('aria-pressed', answers[c.key] === false ? 'true' : 'false');
+        if (entry) entry.textContent = directoryEntry();
+      }
+      yes.onclick = function () { answers[c.key] = true; paint(); box.classList.remove('missing'); err.textContent = ''; };
+      no.onclick = function () { answers[c.key] = false; paint(); box.classList.remove('missing'); err.textContent = ''; };
+      box.repaint = paint;
+      paint();
+    });
+  }
+
+  /** The person's directory listing, exactly as their consent choices would show it. */
+  function directoryEntry() {
+    var addr = [cleaned.address1, cleaned.address2, [cleaned.city, [cleaned.state, cleaned.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')]
+      .filter(Boolean).join(', ');
+    return [(cleaned.first + ' ' + cleaned.last).trim(), loaded.email,
+            consent.phone ? cleaned.phone : '', consent.address ? addr : ''].filter(Boolean).join('\n');
+  }
+
+  /** Marks unanswered questions; returns false if any. */
+  function allAnswered(list) {
+    var missing = list.filter(function (c) { return answers[c.key] !== true && answers[c.key] !== false; });
+    missing.forEach(function (c) {
+      var box = $('q-' + c.key);
+      box.classList.add('missing');
+      box.querySelector('.err').textContent = 'Please choose Yes or No.';
+    });
+    if (missing.length) $('q-' + missing[0].key).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return !missing.length;
+  }
+
+  /** True when the directory can't be chosen because its required choice (news) is No. */
+  function dirBlocked() {
+    var c = dirChoice();
+    return !!(c && c.requires && choiceByKey(c.requires) && answers[c.requires] === false);
+  }
+
+  function choicesNext() {
+    if (!allAnswered(loaded.choices.filter(function (c) { return c.key !== 'directory'; }))) return;
+    var c = dirChoice();
+    if (!c) return toReview();
+    if (dirBlocked()) { answers.directory = false; return toReview(); }   // no news, no directory
+    renderDirectory();
+    go('s-dir');
+  }
+
+  function dirNext() { toReview(); }   // the checkboxes are always a complete answer
+
+  /** "Your choices" lines for a summary box. outcome (optional): the server's results after saving. */
+  function choiceLines(outcome) {
+    var lines = [], waiting = false;
+    loaded.choices.forEach(function (c) {
+      var on, pending = false;
+      if (outcome) {
+        var x = outcome.filter(function (o) { return o.key === c.key; })[0];
+        if (!x || x.value === null) return;   // a failed change is explained in doneProblem
+        on = ['in', 'listed', 'subscribed', 'pending', 'requested'].indexOf(x.value) !== -1;
+        pending = x.value === 'pending' || x.value === 'requested';
+      } else {
+        on = answers[c.key] === true;
+        pending = on && c.key === 'directory' && c.status !== 'in' && !c.approved;
+      }
+      waiting = waiting || pending;
+      lines.push({ text: on ? c.reviewIn : c.reviewOut, star: pending && !!outcome });
+      if (c.key === 'directory' && on) {
+        lines.push('Show phone in directory: ' + (consent.phone ? 'Yes' : 'No'));
+        lines.push('Show address in directory: ' + (consent.address ? 'Yes' : 'No'));
+      }
+    });
+    return { lines: lines, waiting: waiting };
+  }
+
+  /** Someone listed (or waiting) who now says No to news is taken off the directory too. */
+  function removalNote(done) {
+    var c = dirChoice();
+    if (!c || !dirBlocked() || c.status === 'out') return '';
+    return done ? 'Because you chose not to receive our news, you have also been removed from the directory.'
+                : 'The directory is only for people who receive our news, so saving will also remove you from the directory.';
+  }
+
+  function toReview() {
+    renderSummary($('reviewSummary'), cleaned, loaded.email, choiceLines(null).lines);
+    var note = removalNote(false);
+    $('reviewNote').textContent = note;
+    $('reviewNote').hidden = !note;
+    $('reviewMsg').textContent = '';
+    go('s-review');
+  }
+
+  // ---- step 3: save ---------------------------------------------------------------------------------
+  function save() {
+    if (loaded && loaded.preview) return closePreview();
+    busy($('saveBtn'), true, 'Saving…');
+    $('reviewMsg').textContent = '';
+    var req = { token: token, record: cleaned, choices: answers, updated: loaded.updated };
+    if (answers.directory === true) { req.consent = consent; req.terms = agreed; }
+    api('save', req).then(function (d) {
+      finished = true;   // the back gesture doesn't reopen the form; the session stays open (w25)
+      stale = true;
+      var r = d.record;
+      $('doneTitle').textContent = 'Saved. Thank you, ' + (r.first || 'Friend') + '!';
+      $('doneLead').textContent = d.created ? 'You\'ve been added to the Midlothian Friends Meeting roster.'
+        : d.restored ? 'Welcome back! You\'re on the roster again.'
+        : 'Your information is up to date.';
+      // The same choice lines as the Review screen, from what the server actually did.
+      var cl = choiceLines(d.results);
+      consent = { phone: !!d.consent.phone, address: !!d.consent.address };
+      renderSummary($('doneSummary'), r, d.email, cl.lines);
+      var waiting = cl.waiting;
+      var gone = removalNote(true);
+      $('doneNote').textContent = gone;
+      $('doneNote').hidden = !gone;
+      $('doneFootnote').hidden = !waiting;
+      $('doneProblem').hidden = !d.problem;
+      $('doneProblem').textContent = d.problem || '';
+      // Home if they still have directory access, otherwise Close Friendly Contacts (never both).
+      $('doneHome').hidden = !d.access;
+      $('doneClose').hidden = !!d.access;
+      history.pushState({ screen: 'end' }, '');
+      show('s-done');
+    }).catch(function (e) {
+      if (e.sessionProblem) return failed(e);
+      $('reviewMsg').textContent = e.message;
+    }).then(function () { busy($('saveBtn'), false, 'Save'); });
+  }
+
+  function renderSummary(box, r, email, extra) {
+    box.textContent = '';
+    var addr = [r.address1, r.address2, [r.city, [r.state, r.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')]
+      .filter(Boolean).join('\n');
+    var rows = [['Name', (r.first + ' ' + r.last).trim()], ['Email', email], ['Phone', r.phone || '(none)'], ['Address', addr || '(none)']];
+    rows.forEach(function (kv) {
+      var item = add(box, 'div', 'item', '');
+      add(item, 'div', 'k', kv[0]);
+      add(item, 'div', 'v', kv[1]);
+    });
+    if (!extra.length) return;
+    // Choices: one line each; a line may be {text, star} to add a red * (directory request awaiting approval)
+    var item = add(box, 'div', 'item', '');
+    add(item, 'div', 'k', 'Your choices');
+    extra.forEach(function (line) {
+      var row = add(item, 'div', 'v', typeof line === 'string' ? line : line.text);
+      if (line.star) { row.appendChild(document.createTextNode(' ')); add(row, 'span', 'star', '*'); }
+    });
+  }
+
+  /** Session timed out or already used: back to the first card, email filled in, with an explanation. */
+  function failed(e) {
+    if (e.sessionProblem) { restart(e.message); return; }
+    $('waitMsg').textContent = e.message;
+    show('s-wait');
+  }
+
+  $('expStart').addEventListener('click', function () { restart(''); });
+
+  function restart(message) {
+    token = null;
+    finished = false;
+    stale = false;
+    leaveViewer();
+    if (previewMode) {
+      $('previewBar').hidden = true;
+      history.replaceState({ screen: 's-admin' }, '');
+      show('s-admin');
+      $('adminErr').textContent = message || '';
+      return;
+    }
+    applyMode();
+    history.replaceState({ screen: 's-start' }, '');
+    show('s-start');
+    $('startErr').textContent = message || '';
+  }
+
+  // ---- admin preview --------------------------------------------------------------------------------
+  function startPreview() {
+    var pw = $('adminPw').value, email = $('adminEmail').value.trim();
+    $('adminErr').textContent = '';
+    if (!pw || !email) { $('adminErr').textContent = 'Enter the admin password and the member\'s email address.'; return; }
+    busy($('adminGo'), true, 'Checking…');
+    api('adminPreview', { password: pw, email: email }).then(function (d) {
+      $('adminPw').value = '';
+      token = d.token;
+      load();
+    }).catch(function (e) {
+      $('adminErr').textContent = e.message;
+    }).then(function () { busy($('adminGo'), false, 'Preview'); });
+  }
+
+  /** Ends a preview session: nothing is saved, and the server sends no email for it. */
+  function closePreview() {
+    if (token) api('cancel', { token: token }).catch(function () {});
+    token = null;
+    $('previewBar').hidden = true;
+    history.pushState({ screen: 's-previewdone' }, '');
+    show('s-previewdone');
+  }
+
+  /** Cancel at any point: voids an unused code or link, or ends the session on the server too. */
+  function cancelAll() {
+    if (previewMode) return token ? closePreview() : restart('');
+    var hadCode = !!(token || codeRef);
+    var body = token ? { token: token } : codeRef ? { email: $('email').value.trim(), ref: codeRef } : null;
+    if (body) {
+      try {
+        fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, keepalive: true,
+          body: JSON.stringify(Object.assign({ action: 'cancel' }, body)) }).catch(function () {});
+      } catch (e) { /* the code or session still expires on its own */ }
+    }
+    var signedIn = !!token;
+    finished = true; token = null; codeRef = '';
+    leaveViewer();
+    $('cancelMore').textContent = hadCode && !signedIn ? 'Your ' + (mode === 'link' ? 'sign-in link' : 'security code') +
+                                            ' has been cancelled.' : '';
+    history.pushState({ screen: 'end' }, '');
+    show('s-canceled');
+  }
+
+  // ---- the viewer: columns by width, rows by height ------------------------------------------------
+  function cellEl(r) {
+    var c = document.createElement('div');
+    c.className = 'ent'; c.setAttribute('role', 'listitem');
+    add(c, 'div', 'n', r[0] + (r[0] && r[1] ? ', ' : '') + r[1]);
+    var m = add(c, 'a', 'm'); m.href = 'mailto:' + r[2];
+    // Let a long address wrap after "@" or a dot rather than in the middle of a word.
+    String(r[2]).split(/([@.])/).forEach(function (part, i) {
+      if (part) m.appendChild(document.createTextNode(part));
+      if (i % 2 === 1) m.appendChild(document.createElement('wbr'));
+    });
+    add(c, 'div', 'a', r[4] || ' ');
+    add(c, 'div', 'a', r[5] || ' ');
+    var digits = String(r[3] || '').replace(/\D/g, '');
+    if (r[3] && digits.length === 10) { var p = add(c, 'a', 'p', r[3]); p.href = 'tel:+1' + digits; }
+    else add(c, 'div', 'p', r[3] || ' ');
+    return c;
+  }
+
+  /** How many entries fit: 3 columns on wide screens, 2 on phones (1 if very narrow); rows by height. */
+  function measure() {
+    var g = $('grid');
+    var w = g.clientWidth || window.innerWidth;
+    cols = w >= 700 ? 3 : w >= 300 ? 2 : 1;
+    // One sample entry with every line filled, at this width, gives the height a row needs.
+    var probe = cellEl(['Sample', 'Name', 'sample.name@example.com', '(804) 555-0100', '1 Sample Ln', 'Midlothian, VA 23113']);
+    probe.style.cssText = 'position:absolute;visibility:hidden;width:' + Math.floor(w / cols) + 'px';
+    $('viewer').appendChild(probe);
+    var rowH = Math.max(40, probe.offsetHeight);
+    probe.remove();
+    // The height left between the top of the entries and the page buttons, in this window.
+    var avail = window.innerHeight - g.getBoundingClientRect().top - document.querySelector('.pager').offsetHeight - 8;
+    nRows = Math.max(2, Math.floor(avail / rowH));   // a very short window scrolls rather than squeezing entries
+    perPage = cols * nRows;
+    rowHeight = rowH;
+  }
+
+  function layout() {
+    var keep = first;
+    measure();
+    first = Math.floor(keep / perPage) * perPage;   // stay on the page holding the same person
+    render();
+  }
+
+  function render() {
+    var g = $('grid');
+    g.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+    g.style.gridTemplateRows = 'repeat(' + nRows + ', minmax(' + rowHeight + 'px, 1fr))';
+    g.textContent = '';
+    var page = view.slice(first, first + perPage);
+    page.forEach(function (r) { g.appendChild(cellEl(r)); });
+    if (!page.length) add(g, 'div', 'none', query ? 'No one matches “' + query.trim() + '”.' : 'No one is listed yet.');
+    var pages = Math.max(1, Math.ceil(view.length / perPage));
+    var n = Math.floor(first / perPage) + 1;
+    $('pageNo').textContent = (window.innerWidth >= 700 ? 'Page ' : '') + n + ' of ' + pages;
+    $('prevBtn').textContent = window.innerWidth >= 700 ? '← Previous' : '← Prev';   // one row of buttons on a phone
+    $('vRange').textContent = page.length ? page[0][0] + (page.length > 1 ? ' – ' + page[page.length - 1][0] : '') : '';
+    var c = $('vCount');
+    c.classList.toggle('found', !!query);
+    c.textContent = query
+      ? (view.length === 1 ? '1 match' : view.length + ' matches') + ' for “' + query.trim() + '”' +
+        (view.length > perPage ? ' · ' + (first + 1) + '–' + (first + page.length) : '')
+      : view.length ? (first + 1) + '–' + (first + page.length) + ' of ' + view.length : '';
+    $('prevBtn').disabled = first === 0;
+    $('nextBtn').disabled = first + perPage >= view.length;
+  }
+
+  function turn(by) {
+    var to = first + by * perPage;
+    if (to < 0 || to >= view.length) return;
+    first = to;
+    render();
+  }
+
+  function vMessage(text, bad, linkText, href) {
+    var m = $('vMsg');
+    m.textContent = text || '';
+    m.className = 'vmsg' + (bad ? ' bad' : '');
+    if (linkText) {
+      m.appendChild(document.createTextNode(' '));
+      var a = add(m, 'a', 'inline-link', linkText);
+      a.href = href; a.target = '_blank'; a.rel = 'noopener';
+    }
+    m.hidden = !text;
+    if (document.body.classList.contains('viewing') && rows.length) layout();   // the message takes room: refit the rows
+  }
+
+  // ---- search: from the beginning of each word, as contact lists do ------------------------------------
+  // Names split at spaces, hyphens and apostrophes ("Advocate-Ross" is two words); email addresses split at
+  // @ . - _ + ("sarabrod@msn.com" is sarabrod, msn, com). Each word typed must begin some word of the entry:
+  // "p" finds every name starting with P, "pe" narrows to Pe..., "pe fa" finds Peter Farago.
+  function fold(t) {
+    t = String(t).toLowerCase();
+    return t.normalize ? t.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : t;
+  }
+  var WORD_BREAKS = /[\s@.\-_+'\u2019,]+/;
+  function words_(t) { return fold(t).split(WORD_BREAKS).filter(Boolean); }
+
+  function search() {
+    var q = $('q').value;
+    var words = words_(q);
+    $('qClear').hidden = !q;
+    if (!words.length) {
+      if (query) { view = rows; first = browseFirst; query = ''; layout(); }   // back where they were
+      return;
+    }
+    if (!query) browseFirst = first;
+    query = q;
+    view = rows.filter(function (r, i) {
+      return words.every(function (w) {
+        return keys[i].some(function (k) { return k.lastIndexOf(w, 0) === 0; });   // k starts with w
+      });
+    });
+    first = 0;
+    render();
+  }
+
+  function clearSearch() {
+    $('q').value = '';
+    search();
+    $('q').focus();
+  }
+
+  // ---- Download PDF ---------------------------------------------------------------------------------
+  function downloadPdf() {
+    var btn = $('pdfBtn');
+    if (!token) return needSignIn();
+    busy(btn, true, 'Preparing…');
+    vMessage('Preparing the PDF. This can take several seconds…');
+    api('dlGet', { token: token, agree: true }).then(function (d) {
+      var bin = atob(d.pdf), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      var a = $('saveLink');
+      a.href = blobUrl; a.download = d.filename;
+      try { a.click(); } catch (e) { /* the link in the message still works */ }
+      vMessage('Downloaded ' + d.filename + '. Didn’t see it?', false, 'Open it here', blobUrl);
+    }).catch(function (e) {
+      if (e.sessionProblem) return needSignIn();
+      vMessage(e.message, true);
+    }).then(function () { busy(btn, false, 'Download PDF'); });
+  }
+
+  /** The 30-minute sign-in has ended: the directory stays open, but a download needs a fresh sign-in. */
+  function needSignIn() {
+    token = null;
+    var m = $('vMsg');
+    vMessage('For your security, downloading needs a fresh sign-in after 30 minutes.', true);
+    m.appendChild(document.createTextNode(' '));
+    var b = add(m, 'button', 'inline-link', 'Sign in again'); b.type = 'button';
+    b.addEventListener('click', function () { leaveViewer(); restart(''); });
+  }
+
+  function leaveViewer() {
+    document.body.classList.remove('viewing');
+    rows = []; view = []; keys = []; query = ''; $('q').value = ''; $('grid').textContent = '';
+    vMessage('');
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = ''; }
+  }
+
+  // ---- Home, the directory and Close (w25) -------------------------------------------------------------
+  /** Directory on the home screen: the terms of use first, every time. */
+  function openDirectory() {
+    var c = dirChoice() || {};
+    $('homeMsg').textContent = '';
+    $('termsTitle').textContent = c.termsTitle || 'Directory terms of use';
+    $('termsText').textContent = c.terms || '';
+    $('agree').checked = false;
+    $('agreeRow').classList.remove('missing');
+    $('termsMsg').textContent = '';
+    go('s-terms');
+  }
+
+  function openFromTerms() {
+    if (!$('agree').checked) {
+      $('agreeRow').classList.add('missing');
+      $('termsMsg').textContent = 'Please check the box to agree to the directory terms of use.';
+      return;
+    }
+    fetchDirectory();
+  }
+
+  function fetchDirectory() {
+    $('waitMsg').textContent = 'Opening the directory…';
+    show('s-wait');
+    api('dirOpen', { token: token, agree: true }).then(function (d) {
+      rows = d.rows || [];
+      view = rows;
+      keys = rows.map(function (r) { return words_(r[1] + ' ' + r[0] + ' ' + r[2]); });
+      query = ''; $('q').value = ''; $('qClear').hidden = true;
+      $('vStamp').textContent = d.stamp + ' · ' + rows.length + ' people';
+      first = 0;
+      // The terms screen becomes the directory, so Home (and the back gesture) return to Home.
+      history.replaceState({ screen: 'viewer' }, '');
+      show('s-home');   // underneath the viewer (hidden while it's open)
+      document.body.classList.add('viewing');
+      layout();
+    }).catch(function (e) {
+      if (e.sessionProblem) return failed(e);
+      show('s-terms');
+      $('termsMsg').textContent = e.message;
+    });
+  }
+
+  /** Home: from the directory and the terms (one step back), or from the Saved screen. */
+  function goHome() {
+    var at = history.state && history.state.screen;
+    if (at === 'viewer' || at === 's-terms') { history.back(); return; }
+    leaveViewer();
+    finished = false;
+    $('homeMsg').textContent = '';
+    history.replaceState({ screen: 's-home' }, '');
+    show('s-home');
+  }
+
+  /** My information from Home: fresh from the server after a Save, otherwise as loaded. */
+  function homeInfo() {
+    if (stale) return load('info');
+    go('s-info');
+  }
+
+  /** Close Friendly Contacts: end the session quietly and show the website's home page in this tab. */
+  function closeFC() {
+    if (token) {
+      try {
+        fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, keepalive: true,
+          body: JSON.stringify({ action: 'signOut', token: token }) }).catch(function () {});
+      } catch (e) { /* the session ends on its own after 30 minutes */ }
+    }
+    token = null; finished = true;
+    location.replace(HOME_URL);   // replace: Back on the home page doesn't return here
+  }
+
+  // ---- field checks (same rules as the server) ------------------------------------------------------
+  function setErr(f, text) { $('err-' + f).textContent = text; $(f).setAttribute('aria-invalid', 'true'); }
+  function clearErr(f) { var e = $('err-' + f); if (e) e.textContent = ''; $(f).removeAttribute('aria-invalid'); }
+
+  function checkPhone() {
+    var el = $('phone'), v = el.value.trim();
+    if (!v) { el.value = ''; clearErr('phone'); return true; }
+    var d = v.replace(/\D/g, '');
+    if (d.length === 11 && d.charAt(0) === '1') d = d.slice(1);
+    function part(x) { return /^[2-9]\d\d$/.test(x) && !/^[2-9]11$/.test(x); }
+    if (d.length === 10 && part(d.slice(0, 3)) && part(d.slice(3, 6))) {
+      el.value = '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6);
+      clearErr('phone');
+      return true;
+    }
+    setErr('phone', 'Please enter a 10-digit US phone number, or leave it blank.');
+    return false;
+  }
+
+  function checkZip() {
+    var el = $('zip'), v = el.value.trim();
+    el.value = v;
+    if (!v || /^\d{5}$/.test(v)) { clearErr('zip'); return true; }
+    setErr('zip', 'ZIP should be 5 digits.');
+    return false;
+  }
+
+  var lastTidy = '';
+  function tidy() {
+    if (!token) return;
+    var sent = { address1: $('address1').value, address2: $('address2').value, city: $('city').value };
+    var key = JSON.stringify(sent);
+    if (key === lastTidy || (!sent.address1 && !sent.address2 && !sent.city)) return;
+    lastTidy = key;
+    api('tidy', { token: token, fields: sent }).then(function (t) {
+      ['address1', 'address2', 'city'].forEach(function (f) {
+        if ($(f).value === sent[f] && t[f] !== sent[f]) $(f).value = t[f];
+      });
+    }).catch(function () { /* Next applies the same tidy-up */ });
+  }
+
+  function add(parent, tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text) el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  }
+
+  // ---- wiring ---------------------------------------------------------------------------------------
+  $('sendBtn').addEventListener('click', function () { sendCode('start'); });
+  $('email').addEventListener('keydown', function (e) { if (e.key === 'Enter') sendCode('start'); });
+  $('email').addEventListener('input', function () { $('startErr').textContent = ''; $('email').removeAttribute('aria-invalid'); $('suggest').hidden = true; });
+  $('suggestYes').addEventListener('click', function () { $('email').value = $('suggestAddr').textContent; $('suggest').hidden = true; sendCode('start'); });
+  $('suggestNo').addEventListener('click', function () { okAddress = $('email').value.trim(); $('suggest').hidden = true; sendCode('start'); });
+  // Back in this window after opening the link elsewhere: check right away instead of waiting.
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkLinkUsed(); });
+  // "Still no email after ten minutes?" opens and closes the help in place.
+  document.querySelectorAll('[data-help]').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var box = link.parentNode.querySelector('[data-still]');
+      box.hidden = !box.hidden;
+      link.setAttribute('aria-expanded', String(!box.hidden));
+    });
+  });
+  $('verifyBtn').addEventListener('click', verify);
+  $('code').addEventListener('input', function () {
+    var d = this.value.replace(/\D/g, '').slice(0, 6);
+    if (this.value !== d) this.value = d;
+    $('codeErr').textContent = '';
+    this.removeAttribute('aria-invalid');
+  });
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') verify(); });   // checking starts only on Verify / Enter
+  // Keep the code box and buttons in view above the on-screen keypad.
+  $('code').addEventListener('focus', function () {
+    setTimeout(function () { $('codeLabel').scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 350);
+  });
+  document.querySelectorAll('[data-cancel]').forEach(function (b) {
+    b.addEventListener('click', cancelAll);
+  });
+  document.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { history.back(); }); });
+  $('infoNext').addEventListener('click', infoNext);
+  $('choicesNext').addEventListener('click', choicesNext);
+  $('dirNext').addEventListener('click', dirNext);
+  $('saveBtn').addEventListener('click', save);
+  ['phone', 'zip'].forEach(function (f) {
+    var check = f === 'phone' ? checkPhone : checkZip;
+    $(f).addEventListener('blur', check);
+    $(f).addEventListener('change', check);   // also runs after autofill
+    $(f).addEventListener('input', function () { clearErr(f); });
+  });
+  ['first', 'last', 'state'].forEach(function (f) { $(f).addEventListener('input', function () { clearErr(f); }); });
+  $('state').addEventListener('input', function (e) { e.target.value = e.target.value.toUpperCase(); });
+  ['address1', 'address2', 'city'].forEach(function (f) {
+    $(f).addEventListener('blur', tidy);
+    $(f).addEventListener('change', tidy);
+  });
+
+  $('pdfBtn').addEventListener('click', downloadPdf);
+  $('q').addEventListener('input', search);
+  $('q').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { clearSearch(); e.preventDefault(); }
+    else if (e.key === 'Enter') { $('q').blur(); }   // on a phone, put the keyboard away to see the results
+  });
+  $('qClear').addEventListener('click', clearSearch);
+  $('prevBtn').addEventListener('click', function () { turn(-1); });
+  $('nextBtn').addEventListener('click', function () { turn(1); });
+  document.addEventListener('keydown', function (e) {
+    if (!document.body.classList.contains('viewing') || e.target.tagName === 'INPUT') return;
+    if (e.key === 'PageDown' || e.key === 'ArrowRight') { turn(1); e.preventDefault(); }
+    else if (e.key === 'PageUp' || e.key === 'ArrowLeft') { turn(-1); e.preventDefault(); }
+    else if (e.key === 'Home') { first = 0; render(); e.preventDefault(); }
+    else if (e.key === 'End') { first = Math.max(0, Math.floor((view.length - 1) / perPage) * perPage); render(); e.preventDefault(); }
+  });
+  // Swipe left or right on the entries to turn pages.
+  var tx = null, ty = null;
+  $('grid').addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  $('grid').addEventListener('touchend', function (e) {
+    if (tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    tx = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) turn(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    if (!document.body.classList.contains('viewing')) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(layout, 120);
+  });
+  $('homeInfo').addEventListener('click', homeInfo);
+  $('homeDir').addEventListener('click', openDirectory);
+  $('openBtn').addEventListener('click', openFromTerms);
+  $('agree').addEventListener('change', function () { $('agreeRow').classList.remove('missing'); $('termsMsg').textContent = ''; });
+  document.querySelectorAll('[data-home]').forEach(function (b) { b.addEventListener('click', goHome); });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', closeFC); });
+
+  $('adminGo').addEventListener('click', startPreview);
+  $('adminPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('adminEmail').focus(); });
+  $('adminEmail').addEventListener('keydown', function (e) { if (e.key === 'Enter') startPreview(); });
+  $('adminCancel').addEventListener('click', function () { $('adminPw').value = ''; $('adminEmail').value = ''; $('adminErr').textContent = ''; });
+  $('previewAgain').addEventListener('click', function () { $('adminEmail').value = ''; restart(''); });
+
+  $('startTitle').textContent = 'Welcome to ' + APP_NAME;
+  document.title = APP_NAME + ' · Midlothian Friends Meeting';
+  $('ver').textContent = 'Version ' + PAGE_VERSION;
+  applyMode();
+
+  var m = /[#&]k=([A-Za-z0-9_-]{16,400})/.exec(location.hash);
+  var x = /[#&]x=([A-Za-z0-9_-]{16,400})/.exec(location.hash);
+  if (previewMode) {
+    document.title = 'Preview \u00b7 ' + APP_NAME;
+    history.replaceState({ screen: 's-admin' }, '');
+    show('s-admin');
+  } else if (x) {
+    // The email's Cancel button: void that link, and say so.
+    history.replaceState({ screen: 'end' }, '', location.pathname + location.search);
+    api('cancel', { key: x[1] }).catch(function () { /* it expires on its own anyway */ });
+    getConfig();
+    finished = true;
+    $('cancelMore').textContent = 'Your sign-in link no longer works.';
+    show('s-canceled');
+  } else if (m) {
+    getConfig();
+    // Opened from a sign-in link. Take the key out of the address bar and history right away.
+    linkKey = m[1];
+    mode = 'link';
+    history.replaceState({ screen: 's-start' }, '', location.pathname + location.search);
+    signInFromLink();
+  } else {
+    history.replaceState({ screen: 's-start' }, '', location.pathname + location.search);
+    show('s-start');
+    getConfig(true);
+  }
+
+  /** The sign-in method in force, our sender address and the website's home page (this also wakes the script up). */
+  function getConfig(useMethod) {
+    api('config', { method: mode }).then(function (d) {
+      if (d.home) HOME_URL = d.home;
+      if (!useMethod) return;
+      modeFixed = !!d.fixed;
+      fromAddr = d.from || '';
+      if (d.method) mode = d.method;
+      applyMode();
+    }).catch(function () { /* keep the page's own choice */ });
+  }
+</script>
+</body>
+</html>

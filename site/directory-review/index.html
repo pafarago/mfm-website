@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<!--
+  Directory review: roster editors (anyone on the PINs tab) sign in with their Roster Editor password and
+  Accept or Decline the requests waiting in DIRECTORY_PENDING_GROUP. Host this on the MFM website as
+  /directory-review/index.html. It talks to the same Apps Script web app as Friendly Contacts (SCRIPT_URL).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Directory requests · Midlothian Friends Meeting</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --ink:#1f2933; --muted:#5f6b78; --line:#cfd8e3; --bg:#f5f5f7; --card:#ffffff;
+    --go:#1E7B34; --go-press:#17652a; --stop:#111111; --error:#b42318; --link:#1d5fa8;
+    /* Type scales with the screen: a floor for small phones, a ceiling for big phones and tablets. */
+    --fs: clamp(17px, 4.4vw, 21px);
+    --fs-h: clamp(25px, 6.6vw, 34px);
+    --fs-code: clamp(28px, 8vw, 40px);
+    --gap: clamp(12px, 2.4vh, 24px);
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:var(--fs)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width:34rem; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+         padding:max(calc(var(--gap) * 1.2), env(safe-area-inset-top)) 18px max(var(--gap), env(safe-area-inset-bottom)); }
+  .org { font-size:.85em; font-weight:600; color:var(--muted); }
+  .logo { display:block; width:clamp(160px, 52vw, 220px); height:auto; margin:0 auto .6em; }
+  h1, .step { text-align:center; }
+  .closeNote { text-align:center; margin-top:1.6em; }
+  .still p { margin:0 0 .6em; } .still p:last-child { margin-bottom:0; }
+  .helpLink { margin-top:1em; }
+  .step { font-size:.85em; color:var(--muted); margin-top:.2em; }
+  h1 { font-size:var(--fs-h); line-height:1.2; margin:.15em 0 var(--gap); }
+  p { margin:0 0 var(--gap); }
+  .screen { display:flex; flex-direction:column; flex:1; }
+  .grow { flex:1; min-height:var(--gap); }
+
+  label { display:block; font-weight:600; margin:0 0 .35em; }
+  .field { margin-bottom:var(--gap); }
+  .hint { font-size:.85em; color:var(--muted); font-weight:400; }
+  .field > .hint { margin-top:.3em; }
+  input[type=text], input[type=email], input[type=tel], input[type=password] {
+    width:100%; font:inherit; font-size:max(18px, 1em); padding:.7em .8em; border:1px solid var(--line); border-radius:14px;
+    background:#fff; color:var(--ink); appearance:none; }
+  input:focus { outline:3px solid rgba(29,95,168,.35); border-color:var(--link); }
+  input[aria-invalid="true"] { border-color:var(--error); }
+  .code input { font-size:var(--fs-code); letter-spacing:.35em; text-align:center; padding:.45em .5em;
+                font-variant-numeric:tabular-nums; }
+  .err { color:var(--error); font-size:.9em; margin-top:.4em; }
+  .err:empty { display:none; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .readonly { padding:.7em .8em; border-radius:14px; background:#eef1f5; word-break:break-all; }
+  .note { background:#e8f3ea; border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); font-size:.95em; }
+  .group-note { font-size:.85em; color:var(--muted); margin:0 0 var(--gap); }
+  .textlink { display:block; margin:var(--gap) auto 0; background:none; border:0; padding:.2em; min-height:0; width:auto;
+              color:var(--link); font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; }
+  .inline-link { color:var(--link); font-weight:600; text-decoration:underline; background:none; border:0; padding:0;
+                 font:inherit; cursor:pointer; min-height:0; width:auto; }
+  .privacy { font-size:.8em; color:var(--muted); text-align:center; margin-top:calc(var(--gap) * .8); }
+
+  /* Buttons: pairs side by side; Cancel black, Next/Send/Verify/Save green, Back outlined */
+  .buttons { display:flex; flex-direction:column; gap:12px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .pair.single { grid-template-columns:1fr; }
+  button { font:inherit; font-size:1.05em; font-weight:600; min-height:clamp(52px, 7vh, 64px); border:0; border-radius:16px;
+           width:100%; cursor:pointer; padding:.5em .8em; }
+  button:focus-visible { outline:3px solid rgba(29,95,168,.5); outline-offset:2px; }
+  button:disabled { opacity:.6; cursor:default; }
+  .go { background:var(--go); color:#fff; }   .go:active { background:var(--go-press); }
+  .stop { background:var(--stop); color:#fff; }
+  .back { background:#fff; color:var(--ink); border:2px solid var(--line); }
+
+  /* Yes / No questions */
+  .question { margin:0 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .question.missing { border-color:var(--error); border-width:2px; }
+  .question .q { font-weight:600; margin-bottom:.35em; }
+  .question .now, .question .qnote { font-size:.9em; color:var(--muted); margin-bottom:.6em; }
+  .question .entry { font-size:.9em; background:#f5f7fa; border-radius:10px; padding:.6em .7em; margin-bottom:.7em; }
+  .choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .choice button { background:#fff; color:var(--ink); border:2px solid var(--line); font-size:.95em; }
+  .choice button[aria-pressed="true"].yes { background:var(--go); border-color:var(--go); color:#fff; }
+  .choice button[aria-pressed="true"].no  { background:var(--stop); border-color:var(--stop); color:#fff; }
+
+  .consent { margin:-.4em 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .consent .q { font-weight:600; margin:.2em 0 .45em; }
+  .consent .sub + .sub { margin-top:.9em; }
+  .terms { margin:0 0 var(--gap); padding:.9em; border-radius:16px; background:#fff; border:1px solid var(--line); }
+  .terms .q { font-weight:600; margin-bottom:.35em; }
+  .terms .text { font-size:.95em; margin-bottom:.8em; }
+  .agree { display:flex; gap:.7em; align-items:flex-start; font-weight:600; cursor:pointer; }
+  .agree input { width:1.6em; height:1.6em; flex:0 0 auto; margin:.05em 0 0; accent-color:var(--go); }
+  .agree.missing { color:var(--error); }
+  .agree + .agree { margin-top:.85em; }
+  .agree .sub { display:block; font-weight:400; font-size:.9em; color:var(--muted); margin-top:.15em; }
+  .agree.off { opacity:.45; cursor:default; }
+  .terms .now { font-size:.9em; color:var(--muted); margin-bottom:.7em; }
+  .entry-box { margin:0 0 var(--gap); }
+  .entry-box .entry { background:#fff; border:1px solid var(--line); border-radius:12px; padding:.6em .8em; margin-top:.3em; white-space:pre-line; }
+  .declined { background:#fdecea; color:var(--error); font-weight:600; border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); }
+  .preview-bar { position:sticky; top:0; z-index:9; background:#7a1f1f; color:#fff; text-align:center; font-weight:700;
+                 padding:.55em .7em; border-radius:10px; margin-bottom:.8em; }
+  .question button:disabled { opacity:.45; }
+  .summary { background:#fff; border-radius:16px; padding:.8em .95em; margin:0 0 var(--gap); }
+  .summary .item { padding:.25em 0; }
+  .summary .k { font-size:.8em; color:var(--muted); }
+  .summary .v { white-space:pre-line; }
+  .warn-box { background:#fdecea; color:var(--error); border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); }
+  .star { color:var(--error); font-weight:700; }
+  .footnote { font-size:.9em; }
+  .suggest, .still { margin-top:.7em; padding:.8em .9em; border-radius:12px; background:#fff7e0; border:1px solid #f0d58a; }
+  .suggest .pair { margin-top:.6em; }
+  .suggest button { min-height:2.6em; font-size:.95em; }
+  .msg { color:var(--error); font-weight:600; margin:0 0 var(--gap); }
+  .msg:empty { display:none; }
+  footer { text-align:center; font-size:.7em; color:#9aa5b1; margin-top:var(--gap); }
+  [hidden] { display:none !important; }
+
+  /* Tablets and computers: keep the buttons just under the form instead of at the bottom of a tall screen */
+  @media (min-width: 700px) { .grow { flex:0 0 var(--gap); } main { padding-top:6vh; } }
+</style>
+<style>
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:.9em; margin:0 0 var(--gap); }
+  .card .name { font-weight:700; font-size:1.05em; }
+  .card .meta { font-size:.85em; color:var(--muted); margin-bottom:.5em; word-break:break-all; }
+  .card .prev { font-size:.85em; font-weight:600; background:#fff7e0; border:1px solid #f0d58a; border-radius:10px; padding:.35em .6em; margin-bottom:.5em; }
+  .card .line { font-size:.95em; white-space:pre-line; }
+  .card .line.off { color:var(--muted); }
+  .card .tags { margin:.5em 0 .7em; }
+  .tag { display:inline-block; font-size:.78em; font-weight:600; padding:.1em .6em; border-radius:999px;
+         background:#eef1f5; color:var(--muted); margin:0 .4em .3em 0; }
+  .tag.y { background:#e8f3ea; color:#17652a; }
+  .card .warn-box { margin:.4em 0 .7em; font-size:.9em; }
+  .sum { font-size:.9em; color:var(--muted); text-align:center; margin:-.5em 0 var(--gap); }
+  .who { font-size:.85em; color:var(--muted); text-align:center; }
+  .confirm-text { font-size:.95em; }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/logo.png" alt="Quakers, Midlothian Friends Meeting" onload="document.querySelector('.org').hidden = true" onerror="this.remove()">
+  <div class="org">Midlothian Friends Meeting</div>
+
+  <section class="screen" id="s-signin" hidden>
+    <h1>Directory requests</h1>
+    <p>For roster editors. Sign in with your Roster Editor password.</p>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="120">
+    </div>
+    <div class="field">
+      <label for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password" maxlength="64">
+      <div class="err" id="signinErr" role="alert"></div>
+    </div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="stop" id="clearBtn" type="button">Cancel</button><button class="go" id="signinBtn" type="button">Sign in</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="s-list" hidden>
+    <h1 id="listTitle">Requests</h1>
+    <div class="sum" id="listSum">Oldest first. Each shows only what the person agreed to list.</div>
+    <div class="note" id="listNote" hidden></div>
+    <div class="msg" id="listMsg" role="alert"></div>
+    <div id="cards"></div>
+    <button class="textlink" id="refreshBtn" type="button">Refresh</button>
+    <div class="grow"></div>
+    <p class="who"><span id="whoAmI"></span> · <button class="inline-link" id="signoutBtn" type="button">Sign out</button></p>
+  </section>
+
+  <section class="screen" id="s-confirm" hidden>
+    <h1 id="confirmTitle"></h1>
+    <div class="card"><div class="name" id="confirmName"></div><div class="meta" id="confirmMeta"></div></div>
+    <p class="confirm-text" id="confirmText"></p>
+    <div class="card" id="notifyCard" hidden>
+      <label class="agree"><input type="checkbox" id="notify"><span>Email them that the request was declined</span></label>
+    </div>
+    <div class="msg" id="confirmMsg" role="alert"></div>
+    <div class="grow"></div>
+    <div class="buttons">
+      <div class="pair"><button class="back" id="confirmBack" type="button">Back</button><button class="go" id="confirmBtn" type="button">Accept</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="s-out" hidden>
+    <h1>Signed out</h1>
+    <p>You can close this page.</p>
+    <button class="textlink" id="againBtn" type="button">Sign in again</button>
+  </section>
+
+  <section class="screen" id="s-wait" hidden><p id="waitMsg">One moment…</p></section>
+
+  <footer id="ver"></footer>
+</main>
+
+<script>
+  // ---- configuration --------------------------------------------------------------------
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1jd5kCQYgxXpQeNiJMASztq5An4xw1F7063KQIa9R7Izw_3Bj3MAyZYgUPH8VVu_BlQ/exec';
+  var PAGE_VERSION = '2026-11-20w25';
+  // -----------------------------------------------------------------------------------------
+
+  var token = null;     // Roster Editor session (6 hours); kept only in this page's memory
+  var items = [];
+  var current = null;   // the request being confirmed
+  var decision = '';
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.hidden = s.id !== id; });
+    window.scrollTo(0, 0);
+  }
+
+  function api(action, data) {
+    var body = JSON.stringify(Object.assign({ action: action }, data || {}));
+    return fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { throw new Error('We couldn\'t reach the server. Please check your connection and try again.'); })
+      .then(function (j) {
+        if (j.version) $('ver').textContent = 'Version ' + PAGE_VERSION + (j.version === PAGE_VERSION ? '' : ' / script ' + j.version);
+        if (!j.ok) { var e = new Error(j.error || 'Something went wrong.'); e.sessionProblem = j.sessionProblem; throw e; }
+        return j;
+      });
+  }
+  function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = label; }
+  function add(parent, tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text) el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  }
+
+  // ---- sign in ---------------------------------------------------------------------------------------
+  function signIn() {
+    var email = $('email').value.trim(), pw = $('pw').value;
+    $('signinErr').textContent = '';
+    if (!email || !pw) { $('signinErr').textContent = 'Enter your email and password.'; return; }
+    busy($('signinBtn'), true, 'Checking…');
+    api('reviewSignIn', { email: email, password: pw }).then(function (d) {
+      token = d.token;
+      $('pw').value = '';
+      $('whoAmI').textContent = 'Signed in as ' + d.email;
+      loadList('');
+    }).catch(function (e) {
+      $('signinErr').textContent = e.message;
+    }).then(function () { busy($('signinBtn'), false, 'Sign in'); });
+  }
+
+  function toSignIn(message) {
+    token = null;
+    show('s-signin');
+    $('signinErr').textContent = message || '';
+  }
+
+  // ---- the list --------------------------------------------------------------------------------------
+  function loadList(note) {
+    $('waitMsg').textContent = 'Loading requests…';
+    show('s-wait');
+    api('reviewList', { token: token }).then(function (d) {
+      items = d.items;
+      renderList(note);
+      show('s-list');
+    }).catch(failed);
+  }
+
+  function renderList(note) {
+    var n = items.length;
+    $('listTitle').textContent = n === 0 ? 'No requests waiting' : n === 1 ? '1 request waiting' : n + ' requests waiting';
+    $('listSum').hidden = n === 0;
+    $('listNote').hidden = !note;
+    $('listNote').textContent = note || '';
+    $('listMsg').textContent = '';
+    var box = $('cards');
+    box.textContent = '';
+    items.forEach(function (it) {
+      var c = add(box, 'div', 'card');
+      add(c, 'div', 'name', it.name || '(no roster record)');
+      add(c, 'div', 'meta', it.email + (it.asked ? ' · asked ' + it.asked : ''));
+      if (it.previous) add(c, 'div', 'prev', it.previous);   // w25: approved before, left, now asking again
+      add(c, 'div', 'line' + (it.phone ? '' : ' off'), it.phone || (it.showPhone ? 'No phone on file' : 'Phone not listed'));
+      add(c, 'div', 'line' + (it.address ? '' : ' off'), it.address || (it.showAddress ? 'No address on file' : 'Address not listed'));
+      var tags = add(c, 'div', 'tags');
+      add(tags, 'span', 'tag y', 'Name & email');
+      add(tags, 'span', 'tag' + (it.showPhone ? ' y' : ''), 'Phone');
+      add(tags, 'span', 'tag' + (it.showAddress ? ' y' : ''), 'Address');
+      var blocked = !it.onRoster ? 'No active roster record, so this request can’t be accepted.'
+                  : !it.onNews ? 'No longer receiving the news, so this request can’t be accepted.' : '';
+      if (blocked) add(c, 'div', 'warn-box', blocked);
+      var pair = add(c, 'div', 'pair');
+      var dec = add(pair, 'button', 'stop', 'Decline'); dec.type = 'button';
+      var acc = add(pair, 'button', 'go', 'Accept'); acc.type = 'button';
+      acc.disabled = !!blocked;
+      dec.addEventListener('click', function () { openConfirm(it, 'decline'); });
+      acc.addEventListener('click', function () { openConfirm(it, 'accept'); });
+    });
+  }
+
+  // ---- confirm and decide ------------------------------------------------------------------------------
+  function openConfirm(it, what) {
+    current = it; decision = what;
+    var name = it.name || it.email;
+    $('confirmTitle').textContent = (what === 'accept' ? 'Accept ' : 'Decline ') + name + '?';
+    $('confirmName').textContent = name;
+    $('confirmMeta').textContent = it.email + (it.asked ? ' · asked ' + it.asked : '');
+    $('confirmText').textContent = what === 'accept'
+      ? 'They will be listed in the directory and emailed a link to open it.'
+      : 'They come off the waiting list. Friendly Contacts will show them “Your request was declined.” and won’t let them ask again unless the Directory Declined Date is cleared in the roster.';
+    $('notifyCard').hidden = what !== 'decline';
+    $('notify').checked = false;
+    $('confirmMsg').textContent = '';
+    var btn = $('confirmBtn');
+    btn.className = what === 'accept' ? 'go' : 'stop';
+    busy(btn, false, what === 'accept' ? 'Accept' : 'Decline');
+    show('s-confirm');
+  }
+
+  function decide() {
+    var btn = $('confirmBtn'), label = btn.textContent;
+    busy(btn, true, 'Working…');
+    $('confirmBack').disabled = true;
+    api('reviewDecide', { token: token, email: current.email, decision: decision, notify: $('notify').checked }).then(function (d) {
+      var note = d.decision === 'accept'
+        ? d.name + ' is now listed. A welcome email with the link to the directory was sent.'
+        : d.name + '’s request was declined.' + (d.emailed ? ' An email was sent.' : ' No email was sent.');
+      if (d.problem) note += ' ' + d.problem;
+      loadList(note);
+    }).catch(function (e) {
+      if (e.sessionProblem) return failed(e);
+      $('confirmMsg').textContent = e.message;
+    }).then(function () { busy(btn, false, label); $('confirmBack').disabled = false; });
+  }
+
+  function failed(e) {
+    if (e.sessionProblem) { toSignIn(e.message); return; }
+    $('waitMsg').textContent = e.message;
+    show('s-wait');
+  }
+
+  function signOut() {
+    if (token) api('reviewSignOut', { token: token }).catch(function () {});
+    token = null;
+    show('s-out');
+  }
+
+  // ---- wiring ------------------------------------------------------------------------------------------
+  $('signinBtn').addEventListener('click', signIn);
+  $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') signIn(); });
+  $('email').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pw').focus(); });
+  $('clearBtn').addEventListener('click', function () { $('email').value = ''; $('pw').value = ''; $('signinErr').textContent = ''; });
+  $('refreshBtn').addEventListener('click', function () { loadList(''); });
+  $('signoutBtn').addEventListener('click', signOut);
+  $('confirmBack').addEventListener('click', function () { show('s-list'); });
+  $('confirmBtn').addEventListener('click', decide);
+  $('againBtn').addEventListener('click', function () { toSignIn(''); });
+  $('ver').textContent = 'Version ' + PAGE_VERSION;
+  show('s-signin');
+</script>
+</body>
+</html>
