@@ -104,6 +104,28 @@
 .mfm-docs__folder:hover { background: var(--d-hover); color: var(--d-text); text-decoration: none; }
 .mfm-docs__folder .mfm-docs__name { flex: 1 1 auto; }
 .mfm-docs__icon { flex: 0 0 auto; color: var(--d-muted); }
+
+/* Manila folder: the front flap tips open and the sheet lifts on hover,
+   keyboard focus or a touch. */
+.mfm-docs__manila { flex: 0 0 auto; overflow: visible; }
+.mfm-docs__manila-back  { fill: #c8953e; }
+.mfm-docs__manila-paper { fill: #fff; stroke: #d6cdbb; stroke-width: 0.6; }
+.mfm-docs__manila-front { fill: #eec46c; stroke: #d3a54e; stroke-width: 0.5; }
+.mfm-docs__manila-front,
+.mfm-docs__manila-paper {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 0.18s ease;
+}
+.mfm-docs__folder:hover .mfm-docs__manila-front,
+.mfm-docs__folder:focus-visible .mfm-docs__manila-front,
+.mfm-docs__folder:active .mfm-docs__manila-front { transform: skewX(-12deg) scaleY(0.74); }
+.mfm-docs__folder:hover .mfm-docs__manila-paper,
+.mfm-docs__folder:focus-visible .mfm-docs__manila-paper,
+.mfm-docs__folder:active .mfm-docs__manila-paper { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .mfm-docs__manila-front, .mfm-docs__manila-paper { transition: none; }
+}
 .mfm-docs__icon--chevron { width: 20px; height: 20px; }
 
 /* Document row */
@@ -170,6 +192,7 @@
 /* ? help menu (folder pages): top right of the heading row. */
 .mfm-docs__head { position: relative; padding-right: 3.25rem; }
 .mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) { padding-left: 3.25rem; } /* keep the centred title centred */
+.mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) .mfm-docs__title { text-align: center; }
 /* The button sits top right of the heading row; the menu is positioned
    against the row too, so it is never wider than the page on a phone. */
 .mfm-docs__help { position: static; }

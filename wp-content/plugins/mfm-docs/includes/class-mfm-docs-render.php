@@ -84,7 +84,7 @@ class MFM_Docs_Render {
 
 	/**
 	 * The ? button and its menu: How to use this page (opens the help text in
-	 * place), Send feedback to MFM, Return to Home page. A <details> element,
+	 * place), Return to Home page, Send feedback to MFM. A <details> element,
 	 * so it works without JavaScript; help.js only closes it on an outside
 	 * tap or Escape.
 	 */
@@ -94,8 +94,8 @@ class MFM_Docs_Render {
 				. '<summary class="mfm-docs__help-btn" aria-label="%1$s" title="%1$s"><span aria-hidden="true">?</span></summary>'
 				. '<div class="mfm-docs__help-menu">'
 					. '<details class="mfm-docs__help-how"><summary>%2$s</summary><div class="mfm-docs__help-text">%3$s</div></details>'
-					. '<a href="%4$s">%5$s</a>'
 					. '<a href="%6$s">%7$s</a>'
+					. '<a href="%4$s">%5$s</a>'
 				. '</div>'
 			. '</details>',
 			esc_attr__( 'Help', 'mfm-docs' ),
@@ -126,7 +126,7 @@ class MFM_Docs_Render {
 		return sprintf(
 			'<li class="mfm-docs__row mfm-docs__row--folder"><a class="mfm-docs__folder" href="%1$s">%2$s<span class="mfm-docs__name">%3$s</span>%4$s</a></li>',
 			esc_url( self::folder_url( $row['entry'], $row['id'] ) ),
-			self::icon( 'folder' ),
+			self::manila(),
 			esc_html( $row['title'] ),
 			self::icon( 'chevron' )
 		);
@@ -155,6 +155,18 @@ class MFM_Docs_Render {
 
 	public static function notice( string $text ): string {
 		return '<p class="mfm-docs__notice">' . esc_html( $text ) . '</p>';
+	}
+
+	/**
+	 * A small manila folder. Its front flap tips open (and the sheet inside
+	 * lifts) on hover, keyboard focus or a touch; see docs.css.
+	 */
+	private static function manila(): string {
+		return '<svg class="mfm-docs__manila" width="34" height="28" viewBox="0 0 32 26" aria-hidden="true" focusable="false">'
+			. '<path class="mfm-docs__manila-back" d="M2 4a2 2 0 0 1 2-2h7.2l2.6 2.6H28a2 2 0 0 1 2 2V22a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/>'
+			. '<rect class="mfm-docs__manila-paper" x="5" y="5.6" width="22" height="15" rx="1"/>'
+			. '<path class="mfm-docs__manila-front" d="M2 10a1.6 1.6 0 0 1 1.6-1.6h24.8A1.6 1.6 0 0 1 30 10v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/>'
+			. '</svg>';
 	}
 
 	private static function icon( string $name ): string {
