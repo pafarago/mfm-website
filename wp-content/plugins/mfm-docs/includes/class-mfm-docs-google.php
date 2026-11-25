@@ -14,7 +14,7 @@ class MFM_Docs_Google {
 	const API        = 'https://www.googleapis.com/drive/v3/files';
 	const SCOPE      = 'https://www.googleapis.com/auth/drive.readonly';
 	const TOKEN_KEY  = 'mfm_docs_token';
-	const FIELDS     = 'id,name,mimeType,modifiedTime,md5Checksum,version,size,parents,trashed';
+	const FIELDS     = 'id,name,mimeType,modifiedTime,md5Checksum,version,size,parents,trashed,description';
 
 	/** Native Google types we can export, and their export MIME types. */
 	const EXPORT = [

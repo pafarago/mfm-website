@@ -4,8 +4,8 @@
  *
  *   <div class="mfm-docs">
  *     breadcrumb · Up button · title
- *     <ol class="mfm-docs__list">   numbered rows: folders and documents
- *       document row: title (opens the PDF), "Updated …", PDF / Word chips
+ *     <ul class="mfm-docs__list mfm-docs__list--plain">   rows: folders and documents
+ *       document row: title (opens the PDF), "Updated …" or "From archives", PDF chip
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -68,11 +68,11 @@ class MFM_Docs_Render {
 		if ( ! $rows ) {
 			echo self::notice( __( 'There are no documents here yet.', 'mfm-docs' ) );
 		} else {
-			echo '<ol class="mfm-docs__list">';
+			echo '<ul class="mfm-docs__list mfm-docs__list--plain">';
 			foreach ( $rows as $row ) {
 				echo 'folder' === $row['type'] ? self::folder_row( $row ) : self::doc_row( $row );
 			}
-			echo '</ol>';
+			echo '</ul>';
 		}
 
 		echo '</div>';
@@ -104,31 +104,23 @@ class MFM_Docs_Render {
 	}
 
 	private static function doc_row( array $row ): string {
-		$pdf     = self::file_url( $row['id'], 'pdf' );
-		$updated = '';
-		if ( $row['modified'] ) {
-			$ts      = strtotime( $row['modified'] );
-			$updated = sprintf(
+		$pdf = self::file_url( $row['id'], 'pdf' );
+		$ts  = $row['modified'] ? (int) strtotime( $row['modified'] ) : 0;
+		if ( $ts && $ts >= (int) strtotime( MFM_DOCS_UPDATED_SINCE . ' 00:00:00 UTC' ) ) {
+			$meta = sprintf(
 				'<span class="mfm-docs__meta">%s <time datetime="%s">%s</time></span>',
 				esc_html__( 'Updated', 'mfm-docs' ),
 				esc_attr( gmdate( 'c', $ts ) ),
 				esc_html( wp_date( 'M j, Y', $ts ) )
 			);
-		}
-		$chips = sprintf( '<a class="mfm-docs__chip mfm-docs__chip--pdf" href="%s">PDF</a>', esc_url( $pdf ) );
-		if ( $row['word'] ) {
-			$chips .= sprintf(
-				'<a class="mfm-docs__chip" href="%s" download>%s</a>',
-				esc_url( self::file_url( $row['word'], 'docx' ) ),
-				esc_html__( 'Word', 'mfm-docs' )
-			);
+		} else {
+			$meta = '<span class="mfm-docs__meta">' . esc_html__( 'From archives', 'mfm-docs' ) . '</span>';
 		}
 		return sprintf(
-			'<li class="mfm-docs__row mfm-docs__row--doc"><div class="mfm-docs__body"><a class="mfm-docs__name" href="%1$s">%2$s</a>%3$s<span class="mfm-docs__chips">%4$s</span></div></li>',
+			'<li class="mfm-docs__row mfm-docs__row--doc"><div class="mfm-docs__body"><a class="mfm-docs__name" href="%1$s">%2$s</a>%3$s<span class="mfm-docs__chips"><a class="mfm-docs__chip mfm-docs__chip--pdf" href="%1$s">PDF</a></span></div></li>',
 			esc_url( $pdf ),
 			esc_html( $row['title'] ),
-			$updated,
-			$chips
+			$meta
 		);
 	}
 

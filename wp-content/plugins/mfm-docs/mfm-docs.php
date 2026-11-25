@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MFM Docs
  * Description: Shows Google Drive folders (Handbook, Public Documents, Memorial Minutes) as numbered document lists, with cached PDF and Word copies. Replaces embed-all-shortcode.
- * Version:     1.0.1
+ * Version:     1.1.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author:      Midlothian Friends Meeting
@@ -25,19 +25,25 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MFM_DOCS_VERSION', '1.0.1' );
+define( 'MFM_DOCS_VERSION', '1.1.0' );
 // Paths go through WordPress's plugin folder, not __FILE__/__DIR__: on the
 // droplet this folder is a link into a release, and PHP reports (and caches)
 // the physical release path, which then leaks into URLs and goes stale.
 define( 'MFM_DOCS_DIR', WP_PLUGIN_DIR . '/' . basename( __DIR__ ) );
 define( 'MFM_DOCS_FILE', MFM_DOCS_DIR . '/mfm-docs.php' );
 
-// Both can be overridden in wp-config.php.
+// All three can be overridden in wp-config.php.
 if ( ! defined( 'MFM_DOCS_CACHE_DIR' ) ) {
 	define( 'MFM_DOCS_CACHE_DIR', '/var/cache/mfm-docs' );
 }
 if ( ! defined( 'MFM_DOCS_KEY_FILE' ) ) {
 	define( 'MFM_DOCS_KEY_FILE', '/var/opt/GoogleAPI/google-service-account.json' );
+}
+// Lists show "Updated <date>" only for changes on or after this date; older
+// dates mostly record when files were copied into Drive, so those documents
+// show "From archives" instead.
+if ( ! defined( 'MFM_DOCS_UPDATED_SINCE' ) ) {
+	define( 'MFM_DOCS_UPDATED_SINCE', '2025-10-01' );
 }
 
 require MFM_DOCS_DIR . '/includes/class-mfm-docs-log.php';

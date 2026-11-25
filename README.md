@@ -154,6 +154,26 @@ when someone visits, so add a real cron entry on the droplet (`crontab -e`):
 Cached copies live in `/var/cache/mfm-docs` (www-data only, outside the web
 root). Deleting them is always safe; they are rebuilt when needed.
 
+How the lists read Drive:
+
+- **Titles** are the file names, tidied. Leading sort numbers (`1.0 `,
+  `2.1 `, `4) `, `0 `) order the list but are not shown, so
+  `0 Handbook Overview & Content` lists first as "Handbook Overview & Content".
+  A leading year (`2019 Minutes`) is kept.
+- **One row per document.** Files with the same name apart from the extension
+  share a row. A Google Doc wins over a PDF or Word file of the same name (its
+  PDF is exported again after every edit); otherwise a PDF wins over Word.
+  Clicking the title or the PDF button opens the PDF.
+- **"Updated <date>"** shows only for changes on or after
+  `MFM_DOCS_UPDATED_SINCE` (default `2025-10-01`, overridable in
+  `wp-config.php`); older documents show "From archives".
+- **Order** is A–Z by name unless a folder's Drive **Description** holds a
+  line `sort: date-desc` (newest first) or `sort: date-asc` (oldest first).
+  Sub-folders inherit it until one has its own line; `sort: name` switches
+  back to A–Z. Dates come from the name (`2025-10-02`, `10-2-2025`,
+  `10/2/2025`, `October 2, 2025`, `2 Oct 2025`, `Oct 2025`, or a year);
+  items without one come last, A–Z. Changes show after the next sync.
+
 ## Cutover from mfm-classic / embed-all-shortcode
 
 1. Push; check the log shows `linked themes/mfm-theme` and `linked plugins/mfm-docs`.

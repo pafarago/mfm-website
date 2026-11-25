@@ -8,7 +8,7 @@
  * converting in the background so visitors rarely wait.
  *
  * Tree option (not autoloaded):
- *   folders: id => [name, parent, entry]
+ *   folders: id => [name, parent, entry, sort]   (sort: from a "sort:" line in the folder's Description, or '')
  *   files:   id => [name, mime, parent, modified, version]   ("version" changes on every edit)
  *   cited:   id => true                                       (files outside the trees)
  *   synced:  unix time
@@ -41,10 +41,14 @@ class MFM_Docs_Library {
 		'application/vnd.oasis.opendocument.text',
 	];
 
-	/** Which file of a same-name group is opened as the PDF (lower wins). */
+	/**
+	 * Which file of a same-name group is opened as the PDF (lower wins).
+	 * A Google Doc is the master copy, so its PDF (exported again after every
+	 * edit) wins over an older PDF or Word file of the same name.
+	 */
 	const VIEW_RANK = [
-		'application/pdf'                      => 0,
-		'application/vnd.google-apps.document' => 1,
+		'application/vnd.google-apps.document' => 0,
+		'application/pdf'                      => 1,
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 2,
 	];
 
@@ -128,8 +132,9 @@ class MFM_Docs_Library {
 	}
 
 	/**
-	 * Rows to show for a folder: sub-folders and documents, in name order.
-	 * Files with the same name apart from the extension become one row.
+	 * Rows to show for a folder: sub-folders and documents, in name order or
+	 * in date order (see sort_mode()). Files with the same name apart from the
+	 * extension become one row.
 	 */
 	public static function rows( string $folder_id ): array {
 		$tree    = self::tree();
@@ -153,8 +158,44 @@ class MFM_Docs_Library {
 			}
 		}
 
-		usort( $rows, fn( $a, $b ) => MFM_Docs_Titles::compare( $a['sort'], $b['sort'] ) );
+		$mode = self::sort_mode( $folder_id );
+		if ( 'name' === $mode ) {
+			usort( $rows, fn( $a, $b ) => MFM_Docs_Titles::compare( $a['sort'], $b['sort'] ) );
+			return $rows;
+		}
+
+		$desc = 'date-desc' === $mode;
+		foreach ( $rows as &$r ) {
+			$r['date'] = MFM_Docs_Titles::date_key( $r['sort'] );
+		}
+		unset( $r );
+		usort( $rows, function ( $a, $b ) use ( $desc ) {
+			if ( ( '' === $a['date'] ) !== ( '' === $b['date'] ) ) {
+				return '' === $a['date'] ? 1 : -1; // undated last
+			}
+			if ( $a['date'] !== $b['date'] ) {
+				return $desc ? strcmp( $b['date'], $a['date'] ) : strcmp( $a['date'], $b['date'] );
+			}
+			return MFM_Docs_Titles::compare( $a['sort'], $b['sort'] );
+		} );
 		return $rows;
+	}
+
+	/**
+	 * A folder's sort mode: its own "sort:" line, else the nearest parent
+	 * folder's, else 'name'.
+	 */
+	public static function sort_mode( string $folder_id ): string {
+		$folders = self::tree()['folders'];
+		$guard   = 0;
+		while ( isset( $folders[ $folder_id ] ) && $guard++ < 50 ) {
+			$mode = (string) ( $folders[ $folder_id ]['sort'] ?? '' );
+			if ( '' !== $mode ) {
+				return $mode;
+			}
+			$folder_id = (string) $folders[ $folder_id ]['parent'];
+		}
+		return 'name';
 	}
 
 	/** One document row for a single cited file. */
@@ -237,15 +278,25 @@ class MFM_Docs_Library {
 			foreach ( MFM_Docs_Settings::entries() as $entry ) {
 				$root = $entry['folder'];
 				// Fails with a clear message if the folder isn't shared with the service account.
-				MFM_Docs_Google::meta( $root );
-				$folders[ $root ] = [ 'name' => $entry['title'], 'parent' => '', 'entry' => $entry['slug'] ];
+				$meta             = MFM_Docs_Google::meta( $root );
+				$folders[ $root ] = [
+					'name'   => $entry['title'],
+					'parent' => '',
+					'entry'  => $entry['slug'],
+					'sort'   => MFM_Docs_Titles::sort_mode( (string) ( $meta['description'] ?? '' ) ),
+				];
 				$queue = [ $root ];
 				while ( $queue ) {
 					$parent = array_shift( $queue );
 					foreach ( MFM_Docs_Google::children( $parent ) as $item ) {
 						if ( self::FOLDER === $item['mimeType'] ) {
 							if ( ! isset( $folders[ $item['id'] ] ) ) {
-								$folders[ $item['id'] ] = [ 'name' => $item['name'], 'parent' => $parent, 'entry' => $entry['slug'] ];
+								$folders[ $item['id'] ] = [
+									'name'   => $item['name'],
+									'parent' => $parent,
+									'entry'  => $entry['slug'],
+									'sort'   => MFM_Docs_Titles::sort_mode( (string) ( $item['description'] ?? '' ) ),
+								];
 								$queue[] = $item['id'];
 							}
 						} elseif ( in_array( $item['mimeType'], self::SUPPORTED, true ) ) {
@@ -310,8 +361,8 @@ class MFM_Docs_Library {
 
 	/**
 	 * Every [file id, format] a visitor can reach from a list or a card:
-	 * each row's PDF and Word copy. Word files are listed first so their PDF
-	 * conversion can reuse the downloaded copy.
+	 * each row's PDF. (Word copies are no longer offered on the lists; the
+	 * /docs/file/<id>.docx address still works and is built on request.)
 	 *
 	 * @return array<int, array{0:string,1:string}>
 	 */
@@ -320,9 +371,6 @@ class MFM_Docs_Library {
 		$add = function ( ?array $row ) use ( &$out ) {
 			if ( ! $row ) {
 				return;
-			}
-			if ( $row['word'] ) {
-				$out[ $row['word'] . '.docx' ] = [ $row['word'], 'docx' ];
 			}
 			$out[ $row['id'] . '.pdf' ] = [ $row['id'], 'pdf' ];
 		};
