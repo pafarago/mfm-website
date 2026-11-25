@@ -147,6 +147,29 @@ class MFM_Docs_Admin {
 				<?php submit_button( 'Save folders' ); ?>
 			</form>
 
+			<h2>Help and feedback</h2>
+			<p class="description">The <strong>?</strong> button on every folder page offers “How to use this page” (the text below), “Send feedback to MFM” (a form at <a href="<?php echo esc_url( MFM_Docs_Feedback::url() ); ?>" target="_blank"><?php echo esc_html( MFM_Docs_Feedback::url() ); ?></a>) and “Return to Home page”.</p>
+			<form method="post" action="options.php">
+				<?php settings_fields( 'mfm_docs' ); $s = MFM_Docs_Settings::get(); $n = MFM_Docs_Settings::OPTION; ?>
+				<table class="form-table" role="presentation" style="max-width:60rem">
+					<tr>
+						<th scope="row"><label for="mfm-docs-help">How to use this page</label></th>
+						<td>
+							<textarea id="mfm-docs-help" name="<?php echo esc_attr( $n ); ?>[help]" rows="9" class="large-text"><?php echo esc_textarea( (string) $s['help'] ); ?></textarea>
+							<p class="description">A blank line starts a new paragraph; <code>**words**</code> shows them in bold. Empty it and save to get the original text back.</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="mfm-docs-feedback-to">Send feedback to</label></th>
+						<td>
+							<input id="mfm-docs-feedback-to" type="email" class="regular-text" name="<?php echo esc_attr( $n ); ?>[feedback_to]" value="<?php echo esc_attr( (string) $s['feedback_to'] ); ?>">
+							<p class="description">Messages are sent through WordPress mail (MFM Mail). The visitor’s address, if they give one, becomes the Reply-To.</p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( 'Save help and feedback' ); ?>
+			</form>
+
 			<h2>Recent activity</h2>
 			<table class="widefat striped" style="max-width:60rem">
 				<tbody>

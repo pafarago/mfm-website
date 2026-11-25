@@ -3,7 +3,7 @@
  * HTML for folder pages and document cards.
  *
  *   <div class="mfm-docs">
- *     breadcrumb · Up button · title
+ *     breadcrumb · Up button · title · ? help menu (folder pages only)
  *     <ul class="mfm-docs__list mfm-docs__list--plain">   rows: folders and documents
  *       document row: title (opens the PDF), "Updated …" or "From archives", PDF chip
  */
@@ -63,6 +63,9 @@ class MFM_Docs_Render {
 		}
 		$tag = $as_page ? 'h1' : 'h2';
 		printf( '<%1$s class="mfm-docs__title">%2$s</%1$s>', $tag, esc_html( $title ) );
+		if ( $as_page ) {
+			echo self::help_menu( self::folder_url( $entry, $folder_id ) );
+		}
 		echo '</div>';
 
 		if ( ! $rows ) {
@@ -77,6 +80,32 @@ class MFM_Docs_Render {
 
 		echo '</div>';
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The ? button and its menu: How to use this page (opens the help text in
+	 * place), Send feedback to MFM, Return to Home page. A <details> element,
+	 * so it works without JavaScript; help.js only closes it on an outside
+	 * tap or Escape.
+	 */
+	public static function help_menu( string $here ): string {
+		return sprintf(
+			'<details class="mfm-docs__help">'
+				. '<summary class="mfm-docs__help-btn" aria-label="%1$s" title="%1$s"><span aria-hidden="true">?</span></summary>'
+				. '<div class="mfm-docs__help-menu">'
+					. '<details class="mfm-docs__help-how"><summary>%2$s</summary><div class="mfm-docs__help-text">%3$s</div></details>'
+					. '<a href="%4$s">%5$s</a>'
+					. '<a href="%6$s">%7$s</a>'
+				. '</div>'
+			. '</details>',
+			esc_attr__( 'Help', 'mfm-docs' ),
+			esc_html__( 'How to use this page', 'mfm-docs' ),
+			MFM_Docs_Settings::help_html(),
+			esc_url( MFM_Docs_Feedback::url( $here ) ),
+			esc_html__( 'Send feedback to MFM', 'mfm-docs' ),
+			esc_url( home_url( '/' ) ),
+			esc_html__( 'Return to Home page', 'mfm-docs' )
+		);
 	}
 
 	/** One document as a stand-alone card ([mfm_doc]). */

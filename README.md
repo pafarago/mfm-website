@@ -173,6 +173,12 @@ How the lists read Drive:
   back to A–Z. Dates come from the name (`2025-10-02`, `10-2-2025`,
   `10/2/2025`, `October 2, 2025`, `2 Oct 2025`, `Oct 2025`, or a year);
   items without one come last, A–Z. Changes show after the next sync.
+- **The ? button** on every folder page opens a small menu: *How to use this
+  page* (text editable in Settings → MFM Docs → Help and feedback), *Send
+  feedback to MFM* (a form at `/docs/feedback/` that emails the address set
+  there, records@ by default, through MFM Mail; a nonce, a hidden field, a
+  3-second minimum and 5 messages an hour per visitor keep spam out) and
+  *Return to Home page*.
 
 ## Cutover from mfm-classic / embed-all-shortcode
 

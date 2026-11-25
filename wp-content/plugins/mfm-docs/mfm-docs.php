@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MFM Docs
  * Description: Shows Google Drive folders (Handbook, Public Documents, Memorial Minutes) as numbered document lists, with cached PDF and Word copies. Replaces embed-all-shortcode.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author:      Midlothian Friends Meeting
@@ -25,7 +25,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MFM_DOCS_VERSION', '1.1.0' );
+define( 'MFM_DOCS_VERSION', '1.2.0' );
 // Paths go through WordPress's plugin folder, not __FILE__/__DIR__: on the
 // droplet this folder is a link into a release, and PHP reports (and caches)
 // the physical release path, which then leaks into URLs and goes stale.
@@ -54,9 +54,11 @@ require MFM_DOCS_DIR . '/includes/class-mfm-docs-library.php';
 require MFM_DOCS_DIR . '/includes/class-mfm-docs-cache.php';
 require MFM_DOCS_DIR . '/includes/class-mfm-docs-render.php';
 require MFM_DOCS_DIR . '/includes/class-mfm-docs-front.php';
+require MFM_DOCS_DIR . '/includes/class-mfm-docs-feedback.php';
 require MFM_DOCS_DIR . '/includes/class-mfm-docs-admin.php';
 
 MFM_Docs_Front::init();
+MFM_Docs_Feedback::init();
 MFM_Docs_Admin::init();
 MFM_Docs_Library::init();
 
@@ -64,6 +66,15 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require MFM_DOCS_DIR . '/includes/class-mfm-docs-cli.php';
 	WP_CLI::add_command( 'mfm-docs', 'MFM_Docs_CLI' );
 }
+
+// A new version may bring new /docs/ addresses (1.2.0: /docs/feedback/);
+// refresh WordPress's address rules once after each deploy that changes it.
+add_action( 'init', function () {
+	if ( get_option( 'mfm_docs_rules_version' ) !== MFM_DOCS_VERSION ) {
+		flush_rewrite_rules( false );
+		update_option( 'mfm_docs_rules_version', MFM_DOCS_VERSION, false );
+	}
+}, 99 );
 
 register_activation_hook( MFM_DOCS_FILE, function () {
 	MFM_Docs_Front::add_rewrites();

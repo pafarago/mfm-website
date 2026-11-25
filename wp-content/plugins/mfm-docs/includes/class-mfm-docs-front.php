@@ -23,6 +23,10 @@ class MFM_Docs_Front {
 		add_action( 'wp_enqueue_scripts', function () {
 			$css = MFM_DOCS_DIR . '/assets/docs.css';
 			wp_enqueue_style( 'mfm-docs', plugins_url( 'assets/docs.css', MFM_DOCS_FILE ), [], (string) filemtime( $css ) );
+			if ( self::$page ) {
+				$js = MFM_DOCS_DIR . '/assets/help.js';
+				wp_enqueue_script( 'mfm-docs-help', plugins_url( 'assets/help.js', MFM_DOCS_FILE ), [], (string) filemtime( $js ), [ 'in_footer' => true, 'strategy' => 'defer' ] );
+			}
 		} );
 	}
 

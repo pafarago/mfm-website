@@ -1,4 +1,4 @@
-/* MFM Docs — numbered document lists. Uses mfm-theme's colour variables when
+/* MFM Docs — document lists. Uses mfm-theme's colour variables when
    present, with fallbacks so it also reads well under another theme. */
 
 .mfm-docs {
@@ -167,9 +167,103 @@
 .entry-content .mfm-docs { max-width: none; }
 .entry-content .mfm-docs__title { font-size: var(--fs-h2, 1.5rem); }
 
-@media print {
-  .mfm-docs__chips, /* Top of an entry on its own page (no Up button): centre the title like other pages. */
-.mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) { justify-content: center; }
+/* ? help menu (folder pages): top right of the heading row. */
+.mfm-docs__head { position: relative; padding-right: 3.25rem; }
+.mfm-docs-page .mfm-docs__head:not(:has(.mfm-docs__up)) { padding-left: 3.25rem; } /* keep the centred title centred */
+/* The button sits top right of the heading row; the menu is positioned
+   against the row too, so it is never wider than the page on a phone. */
+.mfm-docs__help { position: static; }
+.mfm-docs__help-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--d-border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--d-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  list-style: none;
+}
+.mfm-docs__help-btn::-webkit-details-marker { display: none; }
+.mfm-docs__help-btn::marker { content: ""; }
+.mfm-docs__help-btn:hover,
+.mfm-docs__help[open] > .mfm-docs__help-btn { background: var(--d-hover); }
+.mfm-docs__help-btn:focus-visible { outline: 3px solid var(--d-link); outline-offset: 2px; }
 
-.mfm-docs__up { display: none; }
+.mfm-docs__help-menu {
+  position: absolute;
+  top: calc(44px + 0.4rem);
+  right: 0;
+  z-index: 20;
+  width: min(22rem, 100%);
+  box-sizing: border-box;
+  padding: 0.4rem 0;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius);
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  text-align: left;
+  font-size: 1rem;
+}
+.mfm-docs__help-menu > a,
+.mfm-docs__help-how > summary {
+  display: block;
+  padding: 0.7rem 1rem;
+  color: var(--d-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+.mfm-docs__help-how > summary { list-style: none; }
+.mfm-docs__help-how > summary::-webkit-details-marker { display: none; }
+.mfm-docs__help-how > summary::after { content: " ▾"; color: var(--d-muted); }
+.mfm-docs__help-how[open] > summary::after { content: " ▴"; }
+.mfm-docs__help-menu > a:hover,
+.mfm-docs__help-how > summary:hover { background: var(--d-hover); }
+.mfm-docs__help-menu > a + a,
+.mfm-docs__help-how + a { border-top: 1px solid var(--d-soft); }
+.mfm-docs__help-text { padding: 0 1rem 0.5rem; color: var(--d-text); font-size: 0.9375rem; }
+.mfm-docs__help-text p { margin: 0 0 0.6rem; }
+
+/* Feedback page */
+.mfm-docs-page .mfm-docs--feedback .mfm-docs__head { padding-left: 0; padding-right: 0; }
+.mfm-docs__form label { display: block; margin-bottom: 0.3rem; font-weight: 600; }
+.mfm-docs__form input[type="text"],
+.mfm-docs__form input[type="email"],
+.mfm-docs__form textarea {
+  width: 100%;
+  max-width: 40rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius);
+  font: inherit;
+  box-sizing: border-box;
+}
+.mfm-docs__form-actions { display: flex; align-items: center; gap: 1.25rem; }
+.mfm-docs__button {
+  padding: 0.65rem 1.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--d-green);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mfm-docs__button:hover { background: var(--c-action-hover, #17652a); }
+.mfm-docs__hp { position: absolute !important; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.mfm-docs__notice--ok { background: var(--d-green-tint); color: var(--d-green); margin-bottom: 1rem; }
+.mfm-docs__notice--error { background: #fdecea; color: #a61b1b; margin-bottom: 1rem; }
+
+@media print {
+  .mfm-docs__chips,
+  .mfm-docs__up,
+  .mfm-docs__help { display: none; }
 }
