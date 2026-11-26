@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  /* Same look as Friendly Contacts (site/update/index.html). */
+  :root {
+    --ink:#1f2933; --muted:#5f6b78; --line:#cfd8e3; --bg:#f5f5f7;
+    --go:#1E7B34; --go-press:#17652a; --stop:#111111; --error:#b42318; --link:#1d5fa8;
+    --fs: clamp(17px, 4.4vw, 21px);
+    --fs-h: clamp(25px, 6.6vw, 34px);
+    --gap: clamp(12px, 2.4vh, 24px);
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:var(--fs)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width:34rem; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+         padding:max(calc(var(--gap) * 1.2), env(safe-area-inset-top)) 18px max(var(--gap), env(safe-area-inset-bottom)); }
+  .logo { display:block; width:clamp(160px, 52vw, 220px); height:auto; margin:0 auto .6em; }
+  h1 { font-size:var(--fs-h); line-height:1.2; margin:.15em 0 var(--gap); text-align:center; }
+  p { margin:0 0 var(--gap); }
+  .summary { background:#fff; border-radius:16px; padding:.8em .95em; margin:0 0 var(--gap); }
+  .summary .subject { font-weight:700; margin:0 0 .3em; }
+  .summary .meta { font-size:.85em; color:var(--muted); margin:0; }
+  .note { background:#e8f3ea; border-radius:14px; padding:.7em .85em; margin-bottom:var(--gap); font-size:.95em; }
+  .note.bad { background:#fdecea; color:var(--error); }
+  .closeNote { text-align:center; margin-top:1.6em; }
+  .grow { flex:1; min-height:var(--gap); }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  button { font:inherit; font-size:1.05em; font-weight:600; min-height:clamp(52px, 7vh, 64px); border:0; border-radius:16px;
+           width:100%; cursor:pointer; padding:.5em .8em; }
+  button:focus-visible { outline:3px solid rgba(29,95,168,.5); outline-offset:2px; }
+  button:disabled { opacity:.6; cursor:default; }
+  .go { background:var(--go); color:#fff; }   .go:active { background:var(--go-press); }
+  .stop { background:var(--stop); color:#fff; }
+  .back { background:#fff; color:var(--ink); border:2px solid var(--line); }
+  a { color:var(--link); font-weight:600; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="<?= logo ?>" alt="Midlothian Friends Meeting">
+  <h1>Confirm News Email</h1>
+
+  <? if (view.state === 'ask') { ?>
+    <div id="ask">
+      <div class="summary">
+        <p class="subject"><?= view.subject ?></p>
+        <p class="meta">From <?= view.from ?><br><?= view.received ?></p>
+      </div>
+      <p><?= view.question ?></p>
+    </div>
+  <? } ?>
+
+  <div id="result" class="note<?= view.state === 'invalid' ? ' bad' : '' ?>" <?= view.state === 'ask' ? 'hidden' : '' ?>><?= view.message || '' ?></div>
+  <p id="postLink" hidden><a target="_blank" rel="noopener">See the post on the website</a></p>
+  <p class="closeNote" id="close" <?= view.state === 'ask' ? 'hidden' : '' ?>>You can close this page.</p>
+
+  <? if (view.state === 'ask') { ?>
+    <div class="grow"></div>
+    <div class="pair" id="buttons">
+      <button class="back" id="cancel" type="button">Cancel</button>
+      <button class="<?= view.action === 'approve' ? 'go' : 'stop' ?>" id="ok" type="button"><?= view.action === 'approve' ? 'Approve' : 'Deny' ?></button>
+    </div>
+    <span id="data" hidden data-id="<?= view.id ?>" data-a="<?= view.action ?>" data-r="<?= view.r ?>" data-s="<?= view.s ?>"></span>
+    <script>
+      (function () {
+        var d = document.getElementById('data').dataset;
+        var ok = document.getElementById('ok');
+        var cancel = document.getElementById('cancel');
+        function finish(message, bad, link) {
+          document.getElementById('ask').hidden = true;
+          document.getElementById('buttons').hidden = true;
+          var r = document.getElementById('result');
+          r.textContent = message;
+          r.className = 'note' + (bad ? ' bad' : '');
+          r.hidden = false;
+          if (link) {
+            var p = document.getElementById('postLink');
+            p.querySelector('a').href = link;
+            p.hidden = false;
+          }
+          document.getElementById('close').hidden = false;
+        }
+        cancel.addEventListener('click', function () { finish('Cancelled. Nothing was changed; the link in your email still works.'); });
+        ok.addEventListener('click', function () {
+          ok.disabled = cancel.disabled = true;
+          ok.textContent = 'Working…';
+          google.script.run
+            .withSuccessHandler(function (res) { finish(res.message, !res.ok, res.link); })
+            .withFailureHandler(function (err) { finish('Something went wrong: ' + err.message, true); })
+            .decide(d.id, d.a, d.r, d.s);
+        });
+      })();
+    </script>
+  <? } ?>
+</main>
+</body>
+</html>
